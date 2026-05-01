@@ -1,0 +1,9 @@
+/**
+ * care-log router
+ */
+
+import { factories } from '@strapi/strapi';
+
+export default factories.createCoreRouter('api::care-log.care-log' as any);
+
+// Made with Bob

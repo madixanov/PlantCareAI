@@ -1,0 +1,35 @@
+{
+  "kind": "collectionType",
+  "collectionName": "care_logs",
+  "info": {
+    "singularName": "care-log",
+    "pluralName": "care-logs",
+    "displayName": "Care Log",
+    "description": "Care activity log for plants"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "careType": {
+      "type": "enumeration",
+      "enum": ["watering", "fertilizing", "pruning", "repotting", "other"],
+      "required": true
+    },
+    "notes": {
+      "type": "text",
+      "required": false
+    },
+    "date": {
+      "type": "datetime",
+      "required": true
+    },
+    "plant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::plant.plant",
+      "inversedBy": "care_logs"
+    }
+  }
+}

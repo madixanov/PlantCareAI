@@ -1,0 +1,68 @@
+{
+  "kind": "collectionType",
+  "collectionName": "plants",
+  "info": {
+    "singularName": "plant",
+    "pluralName": "plants",
+    "displayName": "Plant",
+    "description": "Plant entity for AI Plant Care Assistant"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "species": {
+      "type": "string",
+      "required": true
+    },
+    "photo": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": ["images"]
+    },
+    "location": {
+      "type": "string",
+      "required": false
+    },
+    "notes": {
+      "type": "text",
+      "required": false
+    },
+    "acquiredDate": {
+      "type": "date",
+      "required": false
+    },
+    "lightLevel": {
+      "type": "enumeration",
+      "enum": ["low", "medium", "high"],
+      "required": false
+    },
+    "humidity": {
+      "type": "enumeration",
+      "enum": ["low", "medium", "high"],
+      "required": false
+    },
+    "temperaturePreference": {
+      "type": "enumeration",
+      "enum": ["cold", "moderate", "warm"],
+      "required": false
+    },
+    "isToxicToPets": {
+      "type": "boolean",
+      "default": false,
+      "required": false
+    },
+    "care_logs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::care-log.care-log",
+      "mappedBy": "plant"
+    }
+  }
+}
