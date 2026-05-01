@@ -20,8 +20,8 @@ export default async function HomePage() {
           <Link href="/plants/add" className="bg-white text-primary-700 px-6 py-3 rounded-lg font-semibold hover:bg-primary-50 transition-colors">
             Add Your First Plant
           </Link>
-          <Link href="/ai-assistant" className="bg-primary-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-400 transition-colors">
-            Ask AI Assistant
+          <Link href="/find-plants" className="bg-primary-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary-400 transition-colors">
+            Find Plants for Your Room
           </Link>
         </div>
       </div>
@@ -99,28 +99,28 @@ export default async function HomePage() {
       {/* Features Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card p-6">
-          <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mb-4">
-            <span className="text-2xl">🤖</span>
+          <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+            <span className="text-2xl">🌿</span>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">AI-Powered Assistance</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">AI Plant Recommendations</h3>
           <p className="text-gray-600 mb-4">
-            Get personalized plant care recommendations based on your plant's history and conditions.
+            Find the perfect plants for your room based on light, temperature, and pet safety using AI.
           </p>
-          <Link href="/ai-assistant" className="text-primary-600 hover:text-primary-700 font-medium">
-            Try AI Assistant →
+          <Link href="/find-plants" className="text-primary-600 hover:text-primary-700 font-medium">
+            Find Plants →
           </Link>
         </div>
 
         <div className="card p-6">
-          <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-            <span className="text-2xl">📊</span>
+          <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mb-4">
+            <span className="text-2xl">🤖</span>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Care Tracking</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Contextual AI Care Assistant</h3>
           <p className="text-gray-600 mb-4">
-            Log watering, fertilizing, and other care activities to maintain a complete history.
+            Get personalized care advice and health analysis for each plant in your collection.
           </p>
           <Link href="/plants" className="text-primary-600 hover:text-primary-700 font-medium">
-            View Plants →
+            View My Plants →
           </Link>
         </div>
       </div>

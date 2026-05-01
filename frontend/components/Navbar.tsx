@@ -55,14 +55,14 @@ export default function Navbar() {
               Add Plant
             </Link>
             <Link
-              href="/ai-assistant"
+              href="/find-plants"
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                isActive('/ai-assistant')
+                isActive('/find-plants')
                   ? 'bg-primary-50 text-primary-700'
                   : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               }`}
             >
-              AI Assistant
+              Find Plants
             </Link>
           </div>
         </div>

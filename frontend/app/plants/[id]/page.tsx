@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Plant, CareLog, CreateCareLogInput, CareType } from '@/types';
-import { getPlantById, getCareLogs, createCareLog, deletePlant, askAI } from '@/lib/api';
+import { Plant, CareLog, CreateCareLogInput, CareType, AIImageAnalysisResponse } from '@/types';
+import { getPlantById, getCareLogs, createCareLog, deletePlant, askAI, analyzePlantImage } from '@/lib/api';
 
 export default function PlantDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [plant, setPlant] = useState<Plant | null>(null);
   const [careLogs, setCareLogs] = useState<CareLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,6 +18,12 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+
+  // Image analysis state
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageAnalysisResult, setImageAnalysisResult] = useState<AIImageAnalysisResponse | null>(null);
+  const [imageAnalysisLoading, setImageAnalysisLoading] = useState(false);
 
   // Care form state
   const [careType, setCareType] = useState<CareType>('watering');
@@ -77,6 +84,61 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
       setAiResponse('Sorry, there was an error processing your question.');
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image size should be less than 5MB');
+      return;
+    }
+
+    setImageFile(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setSelectedImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAnalyzeImage = async () => {
+    if (!selectedImage || !plant) return;
+
+    setImageAnalysisLoading(true);
+    setImageAnalysisResult(null);
+
+    try {
+      const result = await analyzePlantImage({
+        plantId: plant.id.toString(),
+        image: selectedImage,
+      });
+      setImageAnalysisResult(result);
+    } catch (error) {
+      console.error('Error analyzing image:', error);
+      alert('Sorry, there was an error analyzing the image. Please try again.');
+    } finally {
+      setImageAnalysisLoading(false);
+    }
+  };
+
+  const handleClearImage = () => {
+    setSelectedImage(null);
+    setImageFile(null);
+    setImageAnalysisResult(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -218,35 +280,195 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
             </div>
 
             {showAIChat && (
-              <div className="space-y-4">
-                <form onSubmit={handleAskAI} className="space-y-4">
-                  <div>
-                    <label className="label">Ask about your plant</label>
-                    <textarea
-                      value={aiQuestion}
-                      onChange={(e) => setAiQuestion(e.target.value)}
-                      placeholder="e.g., Why are the leaves turning yellow?"
-                      className="input-field resize-none"
-                      rows={3}
-                      required
-                    />
-                  </div>
-                  <button type="submit" disabled={aiLoading} className="btn-primary w-full">
-                    {aiLoading ? 'Thinking...' : 'Ask AI'}
-                  </button>
-                </form>
+              <div className="space-y-6">
+                {/* Text-based AI Chat */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">💬 Ask a Question</h3>
+                  <form onSubmit={handleAskAI} className="space-y-4">
+                    <div>
+                      <label className="label">Ask about your plant</label>
+                      <textarea
+                        value={aiQuestion}
+                        onChange={(e) => setAiQuestion(e.target.value)}
+                        placeholder="e.g., Why are the leaves turning yellow?"
+                        className="input-field resize-none"
+                        rows={3}
+                        required
+                      />
+                    </div>
+                    <button type="submit" disabled={aiLoading} className="btn-primary w-full">
+                      {aiLoading ? 'Thinking...' : 'Ask AI'}
+                    </button>
+                  </form>
 
-                {aiResponse && (
-                  <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
-                    <div className="flex items-start">
-                      <span className="text-2xl mr-3">🤖</span>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-primary-900 mb-2">AI Response:</p>
-                        <p className="text-gray-800 whitespace-pre-line">{aiResponse}</p>
+                  {aiResponse && (
+                    <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <span className="text-2xl mr-3">🤖</span>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-primary-900 mb-2">AI Response:</p>
+                          <p className="text-gray-800 whitespace-pre-line">{aiResponse}</p>
+                        </div>
                       </div>
                     </div>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-300"></div>
                   </div>
-                )}
+                  <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white text-gray-500">OR</span>
+                  </div>
+                </div>
+
+                {/* Image-based Analysis */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">📷 Upload Photo & Analyze</h3>
+                  
+                  {!selectedImage ? (
+                    <div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                        className="hidden"
+                        id="plant-image-upload"
+                      />
+                      <label
+                        htmlFor="plant-image-upload"
+                        className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary-500 hover:bg-primary-50 transition-colors"
+                      >
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <svg className="w-12 h-12 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <p className="mb-2 text-sm text-gray-500">
+                            <span className="font-semibold">Click to upload</span> or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-500">PNG, JPG, JPEG (MAX. 5MB)</p>
+                        </div>
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Image Preview */}
+                      <div className="relative">
+                        <div className="relative h-64 bg-gray-100 rounded-lg overflow-hidden">
+                          <Image
+                            src={selectedImage}
+                            alt="Plant analysis preview"
+                            fill
+                            className="object-contain"
+                            sizes="(max-width: 1024px) 100vw, 66vw"
+                          />
+                        </div>
+                        <button
+                          onClick={handleClearImage}
+                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 transition-colors"
+                          title="Remove image"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {/* Analyze Button */}
+                      {!imageAnalysisResult && (
+                        <button
+                          onClick={handleAnalyzeImage}
+                          disabled={imageAnalysisLoading}
+                          className="btn-primary w-full"
+                        >
+                          {imageAnalysisLoading ? (
+                            <span className="flex items-center justify-center">
+                              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Analyzing Image...
+                            </span>
+                          ) : (
+                            '🔍 Analyze Plant Health'
+                          )}
+                        </button>
+                      )}
+
+                      {/* Analysis Result */}
+                      {imageAnalysisResult && (
+                        <div className={`rounded-lg p-5 border-2 ${
+                          imageAnalysisResult.status === 'healthy'
+                            ? 'bg-green-50 border-green-300'
+                            : imageAnalysisResult.status === 'warning'
+                            ? 'bg-yellow-50 border-yellow-300'
+                            : 'bg-red-50 border-red-300'
+                        }`}>
+                          {/* Status Header */}
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center">
+                              <span className="text-3xl mr-3">
+                                {imageAnalysisResult.status === 'healthy' ? '✅' :
+                                 imageAnalysisResult.status === 'warning' ? '⚠️' : '🚨'}
+                              </span>
+                              <div>
+                                <h4 className="text-lg font-bold capitalize">
+                                  {imageAnalysisResult.status === 'healthy' ? 'Healthy Plant' :
+                                   imageAnalysisResult.status === 'warning' ? 'Needs Attention' :
+                                   'Critical Condition'}
+                                </h4>
+                                <p className="text-sm text-gray-600">
+                                  Confidence: {Math.round(imageAnalysisResult.confidence * 100)}%
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Analysis Text */}
+                          <div className="mb-4">
+                            <p className="text-gray-800 leading-relaxed">{imageAnalysisResult.analysis}</p>
+                          </div>
+
+                          {/* Issues */}
+                          {imageAnalysisResult.issues.length > 0 && (
+                            <div className="mb-4">
+                              <h5 className="font-semibold text-gray-900 mb-2">🔍 Detected Issues:</h5>
+                              <ul className="list-disc list-inside space-y-1">
+                                {imageAnalysisResult.issues.map((issue, index) => (
+                                  <li key={index} className="text-gray-700 text-sm">{issue}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Care Advice */}
+                          <div>
+                            <h5 className="font-semibold text-gray-900 mb-2">💡 Recommended Actions:</h5>
+                            <ul className="space-y-2">
+                              {imageAnalysisResult.careAdvice.map((advice, index) => (
+                                <li key={index} className="flex items-start">
+                                  <span className="text-primary-600 mr-2">•</span>
+                                  <span className="text-gray-700 text-sm">{advice}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          {/* Analyze Another Button */}
+                          <button
+                            onClick={handleClearImage}
+                            className="mt-4 w-full btn-secondary"
+                          >
+                            📷 Analyze Another Photo
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
