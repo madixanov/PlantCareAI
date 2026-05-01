@@ -1,6 +1,7 @@
 // Plant Types
 export interface Plant {
   id: number;
+  documentId: string;
   name: string;
   species: string;
   location?: string;
@@ -9,6 +10,7 @@ export interface Plant {
   acquiredDate?: string;
   createdAt: string;
   updatedAt: string;
+  care_logs?: CareLog[];
 }
 
 export interface CreatePlantInput {
@@ -24,13 +26,12 @@ export type CareType = 'watering' | 'fertilizing' | 'pruning' | 'repotting' | 'o
 
 export interface CareLog {
   id: number;
+  documentId: string;
+
   careType: CareType;
   notes?: string;
   date: string;
-  plant: {
-    id: number;
-    name: string;
-  };
+
   createdAt: string;
   updatedAt: string;
 }
@@ -39,7 +40,7 @@ export interface CreateCareLogInput {
   careType: CareType;
   notes?: string;
   date: string;
-  plant: number;
+  plant: string;
 }
 
 // AI Types

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { RoomConditions, PlantRecommendation, LightLevel, TemperatureLevel, PetType } from '@/types';
-import { getPlantRecommendations } from '@/lib/api';
+import { getPlantRecommendations } from '@/lib/strapi';
 
 export default function FindPlantsPage() {
   // Room recommendation state

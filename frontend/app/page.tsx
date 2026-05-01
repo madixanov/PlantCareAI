@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getPlants } from '@/lib/api';
+import { getPlants } from '@/lib/strapi';
 import PlantCard from '@/components/PlantCard';
 
 export default async function HomePage() {

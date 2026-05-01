@@ -9,6 +9,7 @@ interface PlantCardProps {
 }
 
 export default function PlantCard({ plant }: PlantCardProps) {
+
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Unknown';
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -18,8 +19,10 @@ export default function PlantCard({ plant }: PlantCardProps) {
     });
   };
 
+  console.log('PLANT CARD PHOTO:', plant.photo);
+
   return (
-    <Link href={`/plants/${plant.id}`}>
+    <Link href={`/plants/${plant.documentId}`}>
       <div className="card hover:shadow-lg transition-shadow duration-200 cursor-pointer group">
         {/* Plant Image */}
         <div className="relative h-48 bg-gray-100 overflow-hidden">

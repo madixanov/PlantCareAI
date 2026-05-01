@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Plant, CareLog, CreateCareLogInput, CareType, AIImageAnalysisResponse } from '@/types';
-import { getPlantById, getCareLogs, createCareLog, deletePlant, askAI, analyzePlantImage } from '@/lib/api';
+import { getPlantById, getCareLogs, createCareLog, deletePlant, askAI, uploadImage, updatePlantImage } from '@/lib/strapi';
+import ImageUpload from '@/components/ImageUpload';
 
 export default function PlantDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -25,6 +26,12 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
   const [imageAnalysisResult, setImageAnalysisResult] = useState<AIImageAnalysisResponse | null>(null);
   const [imageAnalysisLoading, setImageAnalysisLoading] = useState(false);
 
+  // Plant photo upload state
+  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
+  const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null);
+  const [newPhotoPreview, setNewPhotoPreview] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
   // Care form state
   const [careType, setCareType] = useState<CareType>('watering');
   const [careNotes, setCareNotes] = useState('');
@@ -41,7 +48,8 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
         getCareLogs(params.id),
       ]);
       setPlant(plantData);
-      setCareLogs(careLogsData);
+      console.log(plantData?.care_logs || []),
+      setCareLogs(plantData?.care_logs || []);
     } catch (error) {
       console.error('Error loading plant data:', error);
     } finally {
@@ -58,7 +66,7 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
         careType,
         notes: careNotes,
         date: new Date(careDate).toISOString(),
-        plant: plant.id,
+        plant: plant.documentId,
       };
 
       const newLog = await createCareLog(input);
@@ -77,7 +85,7 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
 
     setAiLoading(true);
     try {
-      const response = await askAI(plant.id.toString(), aiQuestion);
+      const response = await askAI(plant.documentId, aiQuestion);
       setAiResponse(response);
     } catch (error) {
       console.error('Error asking AI:', error);
@@ -118,19 +126,6 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
 
     setImageAnalysisLoading(true);
     setImageAnalysisResult(null);
-
-    try {
-      const result = await analyzePlantImage({
-        plantId: plant.id.toString(),
-        image: selectedImage,
-      });
-      setImageAnalysisResult(result);
-    } catch (error) {
-      console.error('Error analyzing image:', error);
-      alert('Sorry, there was an error analyzing the image. Please try again.');
-    } finally {
-      setImageAnalysisLoading(false);
-    }
   };
 
   const handleClearImage = () => {
@@ -147,10 +142,52 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
     if (!confirm(`Are you sure you want to delete ${plant.name}?`)) return;
 
     try {
-      await deletePlant(plant.id.toString());
+      await deletePlant(plant.documentId.toString());
       router.push('/plants');
     } catch (error) {
       console.error('Error deleting plant:', error);
+    }
+  };
+
+  const handlePhotoSelect = (file: File) => {
+    setNewPhotoFile(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setNewPhotoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleClearPhoto = () => {
+    setNewPhotoFile(null);
+    setNewPhotoPreview(null);
+  };
+
+  const handleUploadPhoto = async () => {
+    if (!newPhotoFile || !plant) return;
+
+    setPhotoUploading(true);
+    try {
+      // Upload image to Strapi
+      const uploadedFile = await uploadImage(newPhotoFile);
+      
+      // Update plant with new image
+      const updatedPlant = await updatePlantImage(plant.documentId, uploadedFile.id);
+      
+      // Update local state
+      setPlant(updatedPlant);
+      setShowPhotoUpload(false);
+      setNewPhotoFile(null);
+      setNewPhotoPreview(null);
+      
+      alert('Photo updated successfully!');
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      alert(error instanceof Error ? error.message : 'Failed to upload photo. Please try again.');
+    } finally {
+      setPhotoUploading(false);
     }
   };
 
@@ -225,18 +262,61 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
             </div>
 
             {/* Plant Image */}
-            <div className="relative h-64 bg-gray-100 rounded-lg overflow-hidden mb-4">
-              {plant.photo ? (
-                <Image
-                  src={plant.photo}
-                  alt={plant.name}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 1024px) 100vw, 66vw"
-                />
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-gray-700">Plant Photo</h3>
+                <button
+                  onClick={() => setShowPhotoUpload(!showPhotoUpload)}
+                  className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+                >
+                  {showPhotoUpload ? 'Cancel' : plant.photo ? 'Change Photo' : 'Add Photo'}
+                </button>
+              </div>
+
+              {showPhotoUpload ? (
+                <div className="space-y-4">
+                  <ImageUpload
+                    onImageSelect={handlePhotoSelect}
+                    preview={newPhotoPreview}
+                    onClear={handleClearPhoto}
+                    disabled={photoUploading}
+                    maxSizeMB={5}
+                  />
+                  {newPhotoFile && (
+                    <button
+                      onClick={handleUploadPhoto}
+                      disabled={photoUploading}
+                      className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {photoUploading ? (
+                        <span className="flex items-center justify-center">
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Uploading...
+                        </span>
+                      ) : (
+                        'Save Photo'
+                      )}
+                    </button>
+                  )}
+                </div>
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-100 to-primary-200">
-                  <span className="text-8xl">🌱</span>
+                <div className="relative h-64 bg-gray-100 rounded-lg overflow-hidden">
+                  {plant.photo ? (
+                    <Image
+                      src={plant.photo}
+                      alt={plant.name}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 1024px) 100vw, 66vw"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-100 to-primary-200">
+                      <span className="text-8xl">🌱</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

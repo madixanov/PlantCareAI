@@ -4,6 +4,7 @@ import { Plant, CareLog } from '@/types';
 export const mockPlants: Plant[] = [
   {
     id: 1,
+    documentId: 'mock-doc-1',
     name: 'Monstera Deliciosa',
     species: 'Monstera deliciosa',
     location: 'Living Room - East Window',
@@ -15,6 +16,7 @@ export const mockPlants: Plant[] = [
   },
   {
     id: 2,
+    documentId: 'mock-doc-2',
     name: 'Snake Plant',
     species: 'Sansevieria trifasciata',
     location: 'Bedroom - Corner',
@@ -26,6 +28,7 @@ export const mockPlants: Plant[] = [
   },
   {
     id: 3,
+    documentId: 'mock-doc-3',
     name: 'Pothos',
     species: 'Epipremnum aureum',
     location: 'Kitchen - Hanging Basket',
@@ -37,6 +40,7 @@ export const mockPlants: Plant[] = [
   },
   {
     id: 4,
+    documentId: 'mock-doc-4',
     name: 'Fiddle Leaf Fig',
     species: 'Ficus lyrata',
     location: 'Living Room - Near Window',
@@ -48,6 +52,7 @@ export const mockPlants: Plant[] = [
   },
   {
     id: 5,
+    documentId: 'mock-doc-5',
     name: 'Peace Lily',
     species: 'Spathiphyllum',
     location: 'Bathroom - Shelf',
@@ -59,6 +64,7 @@ export const mockPlants: Plant[] = [
   },
   {
     id: 6,
+    documentId: 'mock-doc-6',
     name: 'Spider Plant',
     species: 'Chlorophytum comosum',
     location: 'Office - Desk',
