@@ -86,24 +86,33 @@ export default function FindPlantsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50/50 via-white to-teal-50/50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         {/* Header */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl mb-4 shadow-lg">
-            <span className="text-3xl">🌿</span>
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl mb-6 shadow-xl float-animation">
+            <span className="text-4xl">🔍</span>
           </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">Find Plants for Your Room</h1>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Tell us about your room conditions and get AI-powered personalized plant recommendations
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+            <span className="bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+              Discover Your Perfect Plants
+            </span>
+          </h1>
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
+            Tell us about your space and get AI-powered personalized plant recommendations tailored to your environment
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Room Conditions Form */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 sticky top-8">
-              <h3 className="font-bold text-gray-900 mb-6 text-lg">Room Conditions</h3>
+            <div className="card p-8 sticky top-8">
+              <div className="flex items-center space-x-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center">
+                  <span className="text-xl">🏠</span>
+                </div>
+                <h3 className="font-bold text-gray-900 text-xl">Room Conditions</h3>
+              </div>
               
               <div className="space-y-6">
                 {/* Light Level */}
@@ -188,7 +197,7 @@ export default function FindPlantsPage() {
                 <button
                   onClick={handleGenerateRecommendations}
                   disabled={recommendationLoading}
-                  className="w-full px-6 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold hover:from-green-600 hover:to-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl disabled:hover:shadow-lg"
+                  className="btn-primary w-full text-lg py-4"
                 >
                   {recommendationLoading ? (
                     <span className="flex items-center justify-center">
@@ -214,41 +223,45 @@ export default function FindPlantsPage() {
           {/* Recommendations Display */}
           <div className="lg:col-span-2">
             {!showRecommendations && !recommendationLoading && (
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-12 text-center">
-                <div className="w-24 h-24 bg-gradient-to-br from-green-100 to-green-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-                  <span className="text-5xl">🌱</span>
+              <div className="card-glass p-16 text-center">
+                <div className="relative w-32 h-32 mx-auto mb-8">
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-200 to-teal-200 rounded-full blur-2xl opacity-50 animate-pulse"></div>
+                  <div className="relative w-32 h-32 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-full flex items-center justify-center float-animation">
+                    <span className="text-7xl">🌱</span>
+                  </div>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-3">Ready to Find Your Perfect Plants?</h3>
-                <p className="text-gray-600 mb-8 max-w-md mx-auto leading-relaxed">
-                  Fill out the room conditions form and click "Generate Recommendations" to get personalized plant suggestions for your space.
+                <h3 className="text-3xl font-bold text-gray-900 mb-4">Ready to Discover?</h3>
+                <p className="text-lg text-gray-600 mb-10 max-w-md mx-auto leading-relaxed">
+                  Fill out the room conditions and click "Generate Recommendations" to get personalized plant suggestions powered by AI.
                 </p>
-                <div className="flex flex-wrap justify-center gap-3 text-sm">
-                  <span className="bg-gray-100 px-4 py-2 rounded-full font-medium text-gray-700 border border-gray-200">🌑 Light conditions</span>
-                  <span className="bg-gray-100 px-4 py-2 rounded-full font-medium text-gray-700 border border-gray-200">🌡️ Temperature</span>
-                  <span className="bg-gray-100 px-4 py-2 rounded-full font-medium text-gray-700 border border-gray-200">🐾 Pet safety</span>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <span className="badge badge-success text-sm px-4 py-2">🌑 Light Analysis</span>
+                  <span className="badge badge-success text-sm px-4 py-2">🌡️ Temperature Match</span>
+                  <span className="badge badge-success text-sm px-4 py-2">🐾 Pet Safety</span>
                 </div>
               </div>
             )}
 
             {showRecommendations && (
-              <div className="space-y-6">
+              <div className="space-y-8">
                 {/* Room Summary */}
-                <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl shadow-lg border-2 border-primary-200 p-6">
+                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl shadow-xl border-2 border-emerald-200 p-8">
                   <div className="flex items-start">
-                    <div className="w-12 h-12 bg-primary-500 rounded-xl flex items-center justify-center mr-4 shadow-md flex-shrink-0">
-                      <span className="text-2xl">🏠</span>
+                    <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center mr-5 shadow-lg flex-shrink-0">
+                      <span className="text-3xl">🏠</span>
                     </div>
                     <div>
-                      <h3 className="font-bold text-primary-900 mb-2 text-lg">Your Room Analysis</h3>
-                      <p className="text-primary-800 leading-relaxed">{roomSummary}</p>
+                      <h3 className="font-bold text-emerald-900 mb-3 text-xl">Your Room Analysis</h3>
+                      <p className="text-emerald-800 leading-relaxed text-lg">{roomSummary}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Plant Recommendations */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {recommendations.map((plant) => (
-                    <div key={plant.id} className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {recommendations.map((plant, index) => (
+                    <div key={plant.id} className="card hover-lift fade-in" style={{ animationDelay: `${index * 0.1}s` }}>
+                      <div className="p-8">
                       {/* Plant Header */}
                       <div className="flex items-start justify-between mb-4">
                         <div>
@@ -305,6 +318,7 @@ export default function FindPlantsPage() {
                           </p>
                         </div>
                       )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -313,7 +327,7 @@ export default function FindPlantsPage() {
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
                   <button
                     onClick={() => setShowRecommendations(false)}
-                    className="px-8 py-3 bg-white border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 shadow-md hover:shadow-lg inline-flex items-center"
+                    className="btn-secondary px-8 py-4 w-full sm:w-auto inline-flex items-center justify-center"
                   >
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -322,7 +336,7 @@ export default function FindPlantsPage() {
                   </button>
                   <Link
                     href="/plants"
-                    className="px-8 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold hover:from-primary-600 hover:to-primary-700 transition-all duration-200 shadow-md hover:shadow-lg inline-flex items-center"
+                    className="btn-primary px-8 py-4 w-full sm:w-auto inline-flex items-center justify-center"
                   >
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
