@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Plant, CareLog, CreateCareLogInput, CareType, AIImageAnalysisResponse } from '@/types';
-import { getPlantById, getCareLogs, createCareLog, deletePlant, askAI, uploadImage, updatePlantImage } from '@/lib/strapi';
+import { getPlantById, getCareLogs, createCareLog, deletePlant, askAI, uploadImage, updatePlantImage, detectDisease, detectDiseaseAdvanced, Detection } from '@/lib/strapi';
 import ImageUpload from '@/components/ImageUpload';
+import DiseaseDetectionCanvas from '@/components/DiseaseDetectionCanvas';
 
 export default function PlantDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -25,6 +26,11 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageAnalysisResult, setImageAnalysisResult] = useState<AIImageAnalysisResponse | null>(null);
   const [imageAnalysisLoading, setImageAnalysisLoading] = useState(false);
+  
+  // Advanced disease detection state
+  const [useAdvancedDetection, setUseAdvancedDetection] = useState(false);
+  const [advancedDetections, setAdvancedDetections] = useState<Detection[]>([]);
+  const [diseaseExplanation, setDiseaseExplanation] = useState<string>('');
 
   // Plant photo upload state
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
@@ -85,7 +91,8 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
 
     setAiLoading(true);
     try {
-      const response = await askAI(plant.documentId, aiQuestion);
+      // Pass plantId for RAG-style context-aware responses
+      const response = await askAI(aiQuestion, plant.documentId);
       setAiResponse(response);
     } catch (error) {
       console.error('Error asking AI:', error);
@@ -122,16 +129,47 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
   };
 
   const handleAnalyzeImage = async () => {
-    if (!selectedImage || !plant) return;
+    if (!imageFile || !plant) return;
 
     setImageAnalysisLoading(true);
     setImageAnalysisResult(null);
+    setAdvancedDetections([]);
+    setDiseaseExplanation('');
+
+    try {
+      if (useAdvancedDetection) {
+        // Use advanced YOLOS detection
+        const result = await detectDiseaseAdvanced(imageFile);
+        setAdvancedDetections(result.detections);
+        if (result.explanation) {
+          setDiseaseExplanation(result.explanation);
+        }
+      } else {
+        // Use basic classification
+        const result = await detectDisease(imageFile);
+        // Convert to old format for compatibility
+        setImageAnalysisResult({
+          status: result.confidence > 0.7 ? 'healthy' : 'warning',
+          confidence: result.confidence,
+          analysis: result.explanation,
+          issues: result.label.toLowerCase().includes('healthy') ? [] : [result.label],
+          careAdvice: result.explanation.split('\n').filter(line => line.trim().length > 0).slice(0, 3),
+        });
+      }
+    } catch (error) {
+      console.error('Error analyzing image:', error);
+      alert(error instanceof Error ? error.message : 'Failed to analyze image. Please try again.');
+    } finally {
+      setImageAnalysisLoading(false);
+    }
   };
 
   const handleClearImage = () => {
     setSelectedImage(null);
     setImageFile(null);
     setImageAnalysisResult(null);
+    setAdvancedDetections([]);
+    setDiseaseExplanation('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -457,8 +495,29 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
                         </button>
                       </div>
 
+                      {/* Detection Mode Toggle */}
+                      {!imageAnalysisResult && advancedDetections.length === 0 && (
+                        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                          <label className="flex items-center justify-between cursor-pointer">
+                            <div>
+                              <p className="font-medium text-gray-900">Advanced Detection (YOLOS)</p>
+                              <p className="text-sm text-gray-600">Visual disease localization with bounding boxes</p>
+                            </div>
+                            <div className="relative">
+                              <input
+                                type="checkbox"
+                                checked={useAdvancedDetection}
+                                onChange={(e) => setUseAdvancedDetection(e.target.checked)}
+                                className="sr-only peer"
+                              />
+                              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                            </div>
+                          </label>
+                        </div>
+                      )}
+
                       {/* Analyze Button */}
-                      {!imageAnalysisResult && (
+                      {!imageAnalysisResult && advancedDetections.length === 0 && (
                         <button
                           onClick={handleAnalyzeImage}
                           disabled={imageAnalysisLoading}
@@ -473,9 +532,40 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
                               Analyzing Image...
                             </span>
                           ) : (
-                            '🔍 Analyze Plant Health'
+                            useAdvancedDetection ? '🎯 Detect & Localize Diseases' : '🔍 Analyze Plant Health'
                           )}
                         </button>
+                      )}
+
+                      {/* Advanced Detection Results */}
+                      {advancedDetections.length > 0 && selectedImage && (
+                        <div className="space-y-4">
+                          <DiseaseDetectionCanvas
+                            imageUrl={selectedImage}
+                            detections={advancedDetections}
+                          />
+                          
+                          {/* Disease Explanation */}
+                          {diseaseExplanation && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-5">
+                              <div className="flex items-start">
+                                <span className="text-2xl mr-3">💡</span>
+                                <div className="flex-1">
+                                  <h5 className="font-semibold text-blue-900 mb-2">Disease Information:</h5>
+                                  <p className="text-gray-800 whitespace-pre-line">{diseaseExplanation}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Analyze Another Button */}
+                          <button
+                            onClick={handleClearImage}
+                            className="w-full btn-secondary"
+                          >
+                            📷 Analyze Another Photo
+                          </button>
+                        </div>
                       )}
 
                       {/* Analysis Result */}

@@ -212,15 +212,331 @@ export async function createCareLog(input: CreateCareLogInput): Promise<CareLog>
 }
 
 // ============================================================================
-// AI (MOCK SAFE)
+// AI ASSISTANT
 // ============================================================================
 
-export async function askAI(plantId: string, question: string): Promise<string> {
-  const plant = await getPlantById(plantId);
+/**
+ * Get or create session ID for conversation memory
+ */
+function getSessionId(): string {
+  if (typeof window === 'undefined') {
+    // Server-side: generate new session ID
+    return crypto.randomUUID();
+  }
 
-  if (!plant) return 'Plant not found';
+  // Client-side: get from localStorage or create new
+  const STORAGE_KEY = 'plantcare_session_id';
+  let sessionId = localStorage.getItem(STORAGE_KEY);
+  
+  if (!sessionId) {
+    sessionId = crypto.randomUUID();
+    localStorage.setItem(STORAGE_KEY, sessionId);
+  }
+  
+  return sessionId;
+}
 
-  return `AI response about ${plant.name}: ${question}`;
+export async function askAI(
+  message: string,
+  plantId?: string,
+  diseaseInfo?: { label: string; confidence: number }
+): Promise<string> {
+  try {
+    // Get or create session ID for memory
+    const sessionId = getSessionId();
+
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message,
+        plantId,
+        diseaseInfo,
+        sessionId,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      
+      if (response.status === 429) {
+        return 'Too many requests. Please wait a moment and try again.';
+      }
+      
+      if (response.status === 401) {
+        return 'AI service is temporarily unavailable. Please try again later.';
+      }
+      
+      return errorData.error || 'Unable to get AI response. Please try again.';
+    }
+
+    const data = await response.json();
+    return data.answer || 'No response received from AI.';
+  } catch (error) {
+    console.error('AI request error:', error);
+    return 'Failed to connect to AI service. Please check your connection and try again.';
+  }
+}
+
+// ============================================================================
+// DISEASE DETECTION
+// ============================================================================
+
+export async function detectDisease(
+  file: File,
+  onProgress?: (status: string, data?: any) => void
+): Promise<{
+  label: string;
+  confidence: number;
+  explanation: string;
+}> {
+  // Client-side validation
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+  const maxSizeMB = 5;
+  const maxSizeBytes = maxSizeMB * 1024 * 1024;
+
+  // Validate file type
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error('Invalid file type. Only JPG, JPEG, and PNG images are allowed.');
+  }
+
+  // Validate file size
+  if (file.size > maxSizeBytes) {
+    throw new Error(`File size exceeds ${maxSizeMB}MB limit.`);
+  }
+
+  try {
+    // Step 1: Analyzing image
+    onProgress?.('Analyzing image...');
+
+    // Call unified analyze-plant endpoint
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch('/api/analyze-plant', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to analyze plant disease. Please try again.');
+    }
+
+    // Check if response is streaming (SSE) or regular JSON
+    const contentType = response.headers.get('content-type');
+    
+    if (contentType?.includes('text/event-stream')) {
+      // Handle streaming response
+      return await handleStreamingResponse(response, onProgress);
+    } else {
+      // Handle regular JSON response (cached)
+      const data = await response.json();
+      
+      // Validate response structure
+      if (!data.label || typeof data.confidence !== 'number' || !data.explanation) {
+        throw new Error('Invalid response from disease analysis service.');
+      }
+
+      onProgress?.('Complete', data);
+
+      return {
+        label: data.label,
+        confidence: data.confidence,
+        explanation: data.explanation,
+      };
+    }
+  } catch (error) {
+    console.error('Disease detection error:', error);
+    
+    if (error instanceof Error) {
+      throw error;
+    }
+    
+    throw new Error('Failed to connect to disease analysis service. Please check your connection and try again.');
+  }
+}
+
+/**
+ * Handle streaming SSE response from analyze-plant endpoint
+ */
+async function handleStreamingResponse(
+  response: Response,
+  onProgress?: (status: string, data?: any) => void
+): Promise<{
+  label: string;
+  confidence: number;
+  explanation: string;
+}> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('No response body available');
+  }
+
+  const decoder = new TextDecoder();
+  let label = '';
+  let confidence = 0;
+  let explanation = '';
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) break;
+
+      // Decode chunk and add to buffer
+      buffer += decoder.decode(value, { stream: true });
+
+      // Process complete SSE messages
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || ''; // Keep incomplete message in buffer
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          
+          try {
+            const parsed = JSON.parse(data);
+
+            if (parsed.type === 'detection') {
+              // Step 2: Detection complete
+              label = parsed.label;
+              confidence = parsed.confidence;
+              onProgress?.('Detecting disease...', { label, confidence });
+            } else if (parsed.type === 'chunk') {
+              // Step 3: Streaming explanation
+              if (explanation === '') {
+                onProgress?.('Generating explanation...');
+              }
+              explanation += parsed.text;
+              onProgress?.('streaming', { chunk: parsed.text, explanation });
+            } else if (parsed.type === 'done') {
+              // Step 4: Complete
+              onProgress?.('Complete', { label, confidence, explanation });
+            } else if (parsed.type === 'error') {
+              console.error('Streaming error:', parsed.message);
+            }
+          } catch (parseError) {
+            console.error('Error parsing SSE data:', parseError);
+          }
+        }
+      }
+    }
+
+    // Validate final result
+    if (!label || typeof confidence !== 'number' || !explanation) {
+      throw new Error('Incomplete response from disease analysis service.');
+    }
+
+    return {
+      label,
+      confidence,
+      explanation,
+    };
+  } catch (error) {
+    console.error('Stream processing error:', error);
+    throw new Error('Failed to process streaming response.');
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+// ============================================================================
+// ADVANCED DISEASE DETECTION (YOLOS)
+// ============================================================================
+
+export interface Detection {
+  label: string;
+  confidence: number;
+  box: [number, number, number, number];
+}
+
+export async function detectDiseaseAdvanced(file: File): Promise<{
+  detections: Detection[];
+  explanation?: string;
+}> {
+  // Client-side validation
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+  const maxSizeMB = 5;
+  const maxSizeBytes = maxSizeMB * 1024 * 1024;
+
+  // Validate file type
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error('Invalid file type. Only JPG, JPEG, and PNG images are allowed.');
+  }
+
+  // Validate file size
+  if (file.size > maxSizeBytes) {
+    throw new Error(`File size exceeds ${maxSizeMB}MB limit.`);
+  }
+
+  try {
+    // Step 1: Upload image to YOLOS detection endpoint
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const detectionResponse = await fetch('/api/detect-disease-advanced', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!detectionResponse.ok) {
+      const errorData = await detectionResponse.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to detect plant disease. Please try again.');
+    }
+
+    const detectionData = await detectionResponse.json();
+    
+    // Validate detection response structure
+    if (!detectionData.detections || !Array.isArray(detectionData.detections)) {
+      throw new Error('Invalid response from disease detection service.');
+    }
+
+    const { detections } = detectionData;
+
+    // Step 2: Get explanation for the top detection if confidence is high enough
+    let explanation: string | undefined;
+    
+    if (detections.length > 0 && detections[0].confidence > 0.5) {
+      try {
+        const explanationResponse = await fetch('/api/explain-disease', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ label: detections[0].label }),
+        });
+
+        if (explanationResponse.ok) {
+          const explanationData = await explanationResponse.json();
+          explanation = explanationData.explanation || 'No explanation available.';
+        } else {
+          // If explanation fails, provide a fallback message
+          explanation = 'Unable to retrieve disease explanation at this time.';
+        }
+      } catch (explanationError) {
+        console.error('Disease explanation error:', explanationError);
+        explanation = 'Unable to retrieve disease explanation at this time.';
+      }
+    }
+
+    // Step 3: Return combined result
+    return {
+      detections,
+      explanation,
+    };
+  } catch (error) {
+    console.error('Advanced disease detection error:', error);
+    
+    if (error instanceof Error) {
+      throw error;
+    }
+    
+    throw new Error('Failed to connect to disease detection service. Please check your connection and try again.');
+  }
 }
 
 // ============================================================================

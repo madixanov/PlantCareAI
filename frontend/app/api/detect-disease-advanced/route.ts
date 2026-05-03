@@ -1,0 +1,129 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+// TODO: merge YOLOS + classification into one pipeline
+// TODO: add caching (Redis) for common diseases
+// TODO: add GPU support for faster inference
+
+// Singleton pattern for model loading
+let yolosModel: any = null;
+
+async function getYOLOSModel() {
+  if (!yolosModel) {
+    const { pipeline } = await import('@xenova/transformers');
+    yolosModel = await pipeline(
+      'object-detection',
+      'nickmuchi/yolos-small-plant-disease-detection'
+    );
+  }
+  return yolosModel;
+}
+
+// Clean label by replacing underscores with spaces
+function cleanLabel(label: string): string {
+  return label.replace(/___/g, ' ').replace(/_/g, ' ');
+}
+
+// Fallback to basic classification endpoint
+async function fallbackToBasicDetection(formData: FormData) {
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/detect-disease`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error('Fallback detection failed');
+    }
+
+    const data = await response.json();
+    
+    // Convert classification result to detection format
+    return {
+      detections: [
+        {
+          label: data.disease || 'Unknown',
+          confidence: data.confidence || 0.5,
+          box: [0, 0, 100, 100], // Full image box as fallback
+        },
+      ],
+    };
+  } catch (error) {
+    console.error('Fallback detection error:', error);
+    throw error;
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+
+    if (!file) {
+      return NextResponse.json(
+        { error: 'No file provided' },
+        { status: 400 }
+      );
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      return NextResponse.json(
+        { error: 'Invalid file type. Please upload an image.' },
+        { status: 400 }
+      );
+    }
+
+    // Convert file to buffer
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+
+    try {
+      // Load YOLOS model
+      const model = await getYOLOSModel();
+
+      // Process image with YOLOS
+      const rawDetections = await model(buffer);
+
+      // Process and clean detections
+      let detections = rawDetections.map((det: any) => ({
+        label: cleanLabel(det.label),
+        confidence: Math.round(det.score * 100) / 100,
+        box: [
+          Math.round(det.box.xmin),
+          Math.round(det.box.ymin),
+          Math.round(det.box.xmax),
+          Math.round(det.box.ymax),
+        ],
+      }));
+
+      // Sort by confidence (highest first)
+      detections.sort((a: any, b: any) => b.confidence - a.confidence);
+
+      // Limit to top 3 detections
+      detections = detections.slice(0, 3);
+
+      // If no detections found, fallback to basic detection
+      if (detections.length === 0) {
+        console.log('No YOLOS detections found, falling back to basic detection');
+        return NextResponse.json(await fallbackToBasicDetection(formData));
+      }
+
+      return NextResponse.json({ detections });
+    } catch (modelError) {
+      // If YOLOS fails, fallback to basic classification
+      console.error('YOLOS detection failed, falling back to basic detection:', modelError);
+      return NextResponse.json(await fallbackToBasicDetection(formData));
+    }
+  } catch (error) {
+    console.error('Error in detect-disease-advanced:', error);
+    return NextResponse.json(
+      { error: 'Failed to process image' },
+      { status: 500 }
+    );
+  }
+}
+
+// Use Node.js runtime for better compatibility with transformers
+export const runtime = 'nodejs';
+
+// Made with Bob
