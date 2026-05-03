@@ -36,9 +36,10 @@ let modelPipeline: any = null;
 async function getModel() {
   if (!modelPipeline) {
     const { pipeline } = await import('@xenova/transformers');
+    // Use Xenova model - these have ONNX weights required for @xenova/transformers
     modelPipeline = await pipeline(
       'image-classification',
-      'linkanjarad/mobilenet_v2_plant_disease'
+      'Xenova/vit-base-patch16-224'
     );
   }
   return modelPipeline;
@@ -83,37 +84,36 @@ function validateImageFile(file: File): { valid: boolean; error?: string } {
 async function detectPlantDisease(file: File): Promise<DiseaseDetectionResponse> {
   try {
     // Get model (loads once, reused for subsequent requests)
+    const { RawImage } = await import('@xenova/transformers');
     const classifier = await getModel();
 
-    // Convert file to buffer for processing
+    // CRITICAL FIX: Use RawImage.fromBlob for Node.js runtime
     const arrayBuffer = await file.arrayBuffer();
-    const uint8 = new Uint8Array(arrayBuffer);
+    const blob = new Blob([arrayBuffer], { type: file.type });
+    const image = await RawImage.fromBlob(blob);
+    
+    // Pass RawImage to the model
+    const results = await classifier(image, { topk: 1 });
 
-    // Run classification
-    const results = await classifier(uint8);
-
+    console.log('Model results:', results); // Debug output
 
     // Get top prediction with fallback
     if (!results || results.length === 0) {
-      // Fallback response when model fails or returns no results
-      return {
-        label: "Unknown disease",
-        confidence: 0
-      };
+      throw new Error('Model returned no results');
     }
 
     const topPrediction = results[0];
 
-    // Clean label and round confidence
+    // Clean label and preserve confidence precision
     const cleanedLabel = cleanLabel(topPrediction.label);
-    const roundedConfidence = Math.round((topPrediction.score || 0) * 100) / 100;
+    const confidence = topPrediction.score || 0;
 
     return {
       label: cleanedLabel,
-      confidence: roundedConfidence,
+      confidence: confidence,
     };
   } catch (error) {
-    console.error('Disease detection error:', error);
+    console.error('Disease detection error details:', error);
     
     // Return fallback instead of throwing error
     return {
@@ -129,6 +129,14 @@ async function detectPlantDisease(file: File): Promise<DiseaseDetectionResponse>
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    // Rate limiting (ADDED)
+    const { checkRateLimit } = await import('@/lib/rateLimit');
+    const ip = request.headers.get('x-forwarded-for') || 'anonymous';
+    const isAllowed = await checkRateLimit(ip);
+    if (!isAllowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+
     // Parse multipart/form-data
     const formData = await request.formData();
     const file = formData.get('file') as File | null;

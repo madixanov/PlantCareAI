@@ -55,6 +55,14 @@ async function fallbackToBasicDetection(formData: FormData) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting (ADDED)
+    const { checkRateLimit } = await import('@/lib/rateLimit');
+    const ip = request.headers.get('x-forwarded-for') || 'anonymous';
+    const isAllowed = await checkRateLimit(ip);
+    if (!isAllowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
 
@@ -73,21 +81,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Convert file to buffer
-    const bytes = await file.arrayBuffer();
-    const uint8 = new Uint8Array(bytes);
-
     try {
       // Load YOLOS model
+      const { RawImage } = await import('@xenova/transformers');
       const model = await getYOLOSModel();
 
-      // Process image with YOLOS
-      const rawDetections = await model(uint8);
+      // CRITICAL FIX: Use RawImage.fromBlob for Node.js runtime
+      const arrayBuffer = await file.arrayBuffer();
+      const blob = new Blob([arrayBuffer], { type: file.type });
+      const image = await RawImage.fromBlob(blob);
+      
+      // Pass RawImage to the model
+      const rawDetections = await model(image);
+
+      console.log('YOLOS raw detections:', rawDetections); // Debug output
 
       // Process and clean detections
       let detections = rawDetections.map((det: any) => ({
         label: cleanLabel(det.label),
-        confidence: Math.round(det.score * 100) / 100,
+        confidence: det.score || 0,
         box: det.box
           ? [
               Math.round(det.box.xmin || 0),

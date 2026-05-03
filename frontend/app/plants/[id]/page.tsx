@@ -189,18 +189,18 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
           throw new Error('Invalid analysis result');
         }
         
-        // Safely parse explanation
-        const explanationLines = result.explanation
-          ? result.explanation.split('\n').filter(line => line.trim().length > 0)
-          : [];
+        // Determine status based on label and confidence
+        const isHealthy = result.label.toLowerCase().includes('healthy');
+        const status = isHealthy ? 'healthy' : result.confidence > 0.7 ? 'warning' : 'critical';
         
         // Convert to old format for compatibility
+        // Don't split the explanation - render it as markdown
         setImageAnalysisResult({
-          status: result.confidence > 0.7 ? 'healthy' : 'warning',
+          status: status,
           confidence: result.confidence,
-          analysis: result.explanation || 'No analysis available',
-          issues: result.label.toLowerCase().includes('healthy') ? [] : [result.label],
-          careAdvice: explanationLines.slice(0, 3),
+          analysis: result.explanation || 'No detailed analysis available.',
+          issues: isHealthy ? [] : [result.label],
+          careAdvice: [], // Leave empty - explanation contains all info
           timestamp: new Date().toISOString(),
         });
       }
@@ -626,72 +626,129 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
                         </div>
                       )}
 
-                      {/* Analysis Result */}
+                      {/* Analysis Result - Enhanced Beautiful Design */}
                       {imageAnalysisResult && (
-                        <div className={`rounded-lg p-5 border-2 ${
-                          imageAnalysisResult.status === 'healthy'
-                            ? 'bg-green-50 border-green-300'
-                            : imageAnalysisResult.status === 'warning'
-                            ? 'bg-yellow-50 border-yellow-300'
-                            : 'bg-red-50 border-red-300'
-                        }`}>
-                          {/* Status Header */}
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center">
-                              <span className="text-3xl mr-3">
-                                {imageAnalysisResult.status === 'healthy' ? '✅' :
-                                 imageAnalysisResult.status === 'warning' ? '⚠️' : '🚨'}
-                              </span>
-                              <div>
-                                <h4 className="text-lg font-bold capitalize">
-                                  {imageAnalysisResult.status === 'healthy' ? 'Healthy Plant' :
-                                   imageAnalysisResult.status === 'warning' ? 'Needs Attention' :
-                                   'Critical Condition'}
-                                </h4>
-                                <p className="text-sm text-gray-600">
-                                  Confidence: {Math.round(imageAnalysisResult.confidence * 100)}%
-                                </p>
+                        <div className="animate-fadeIn">
+                          <div className={`rounded-xl p-6 border-2 shadow-lg transition-all duration-300 ${
+                            imageAnalysisResult.status === 'healthy'
+                              ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300'
+                              : imageAnalysisResult.status === 'warning'
+                              ? 'bg-gradient-to-br from-yellow-50 to-amber-50 border-yellow-300'
+                              : 'bg-gradient-to-br from-red-50 to-rose-50 border-red-300'
+                          }`}>
+                            {/* Status Header with Animation */}
+                            <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
+                              <div className="flex items-center space-x-4">
+                                <div className="relative">
+                                  <span className="text-5xl animate-bounce-slow">
+                                    {imageAnalysisResult.status === 'healthy' ? '✅' :
+                                     imageAnalysisResult.status === 'warning' ? '⚠️' : '🚨'}
+                                  </span>
+                                  <div className={`absolute inset-0 rounded-full blur-xl opacity-50 ${
+                                    imageAnalysisResult.status === 'healthy' ? 'bg-green-400' :
+                                    imageAnalysisResult.status === 'warning' ? 'bg-yellow-400' : 'bg-red-400'
+                                  }`}></div>
+                                </div>
+                                <div>
+                                  <h4 className="text-2xl font-bold capitalize bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600">
+                                    {imageAnalysisResult.status === 'healthy' ? 'Healthy Plant' :
+                                     imageAnalysisResult.status === 'warning' ? 'Needs Attention' :
+                                     'Critical Condition'}
+                                  </h4>
+                                  <div className="flex items-center mt-1 space-x-2">
+                                    <div className="flex items-center">
+                                      <span className="text-sm font-medium text-gray-600 mr-2">Confidence:</span>
+                                      <div className="relative w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div
+                                          className={`absolute top-0 left-0 h-full rounded-full transition-all duration-1000 ${
+                                            imageAnalysisResult.status === 'healthy' ? 'bg-green-500' :
+                                            imageAnalysisResult.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
+                                          }`}
+                                          style={{ width: `${imageAnalysisResult.confidence * 100}%` }}
+                                        ></div>
+                                      </div>
+                                      <span className="ml-2 text-sm font-bold text-gray-900">
+                                        {Math.round(imageAnalysisResult.confidence * 100)}%
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          {/* Analysis Text */}
-                          <div className="mb-4">
-                            <p className="text-gray-800 leading-relaxed">{imageAnalysisResult.analysis}</p>
-                          </div>
+                            {/* Issues with Beautiful Cards */}
+                            {imageAnalysisResult.issues.length > 0 && (
+                              <div className="mb-6">
+                                <h5 className="font-semibold text-gray-900 mb-3 flex items-center">
+                                  <span className="text-xl mr-2">🔍</span>
+                                  Detected Condition
+                                </h5>
+                                <div className="space-y-2">
+                                  {imageAnalysisResult.issues.map((issue, index) => (
+                                    <div
+                                      key={index}
+                                      className="flex items-start p-3 bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200 hover:shadow-md transition-shadow duration-200"
+                                      style={{ animationDelay: `${index * 100}ms` }}
+                                    >
+                                      <span className="text-red-500 mr-3 text-lg flex-shrink-0">⚠</span>
+                                      <span className="text-gray-800 font-medium">{issue}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
 
-                          {/* Issues */}
-                          {imageAnalysisResult.issues.length > 0 && (
-                            <div className="mb-4">
-                              <h5 className="font-semibold text-gray-900 mb-2">🔍 Detected Issues:</h5>
-                              <ul className="list-disc list-inside space-y-1">
-                                {imageAnalysisResult.issues.map((issue, index) => (
-                                  <li key={index} className="text-gray-700 text-sm">{issue}</li>
-                                ))}
-                              </ul>
+                            {/* Analysis Text with Markdown Rendering */}
+                            <div className="mb-6 p-4 bg-white/60 backdrop-blur-sm rounded-lg border border-gray-200">
+                              <div className="flex items-start space-x-3">
+                                <span className="text-2xl flex-shrink-0 mt-1">🔬</span>
+                                <div className="flex-1">
+                                  <h5 className="font-semibold text-gray-900 mb-3">Detailed Analysis:</h5>
+                                  <MarkdownRenderer content={imageAnalysisResult.analysis} />
+                                </div>
+                              </div>
                             </div>
-                          )}
 
-                          {/* Care Advice */}
-                          <div>
-                            <h5 className="font-semibold text-gray-900 mb-2">💡 Recommended Actions:</h5>
-                            <ul className="space-y-2">
-                              {imageAnalysisResult.careAdvice.map((advice, index) => (
-                                <li key={index} className="flex items-start">
-                                  <span className="text-primary-600 mr-2">•</span>
-                                  <span className="text-gray-700 text-sm">{advice}</span>
-                                </li>
-                              ))}
-                            </ul>
+                            {/* Care Advice - Only show if not empty */}
+                            {imageAnalysisResult.careAdvice.length > 0 && (
+                              <div className="mb-6">
+                                <h5 className="font-semibold text-gray-900 mb-3 flex items-center">
+                                  <span className="text-xl mr-2">💡</span>
+                                  Quick Actions
+                                </h5>
+                                <div className="space-y-3">
+                                  {imageAnalysisResult.careAdvice.map((advice, index) => (
+                                    <div
+                                      key={index}
+                                      className="flex items-start p-4 bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200 hover:shadow-md transition-all duration-200 hover:scale-[1.02]"
+                                      style={{ animationDelay: `${index * 100}ms` }}
+                                    >
+                                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center mr-3">
+                                        <span className="text-primary-600 font-bold text-sm">{index + 1}</span>
+                                      </div>
+                                      <span className="text-gray-800 leading-relaxed">{advice}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Timestamp */}
+                            <div className="mb-4 text-center">
+                              <p className="text-xs text-gray-500">
+                                Analysis completed at {new Date(imageAnalysisResult.timestamp).toLocaleTimeString()}
+                              </p>
+                            </div>
+
+                            {/* Analyze Another Button - Enhanced */}
+                            <button
+                              onClick={handleClearImage}
+                              className="w-full bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-semibold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] flex items-center justify-center space-x-2"
+                            >
+                              <span className="text-xl">📷</span>
+                              <span>Analyze Another Photo</span>
+                            </button>
                           </div>
-
-                          {/* Analyze Another Button */}
-                          <button
-                            onClick={handleClearImage}
-                            className="mt-4 w-full btn-secondary"
-                          >
-                            📷 Analyze Another Photo
-                          </button>
                         </div>
                       )}
                     </div>

@@ -167,6 +167,14 @@ Be clear, practical, and concise.`;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    // Rate limiting (ADDED)
+    const { checkRateLimit } = await import('@/lib/rateLimit');
+    const ip = request.headers.get('x-forwarded-for') || 'anonymous';
+    const isAllowed = await checkRateLimit(ip);
+    if (!isAllowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+
     // Parse and validate request
     let body: any;
     try {
@@ -192,12 +200,27 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (!process.env.GROQ_API_KEY) {
       return NextResponse.json(
         { error: 'Service temporarily unavailable' },
-        { status: 401 }
+        { status: 503 }
       );
+    }
+
+    // Check cache first (ADDED)
+    const { cache } = await import('@/lib/cache');
+    const cachedExplanation = await cache.get(label);
+    if (cachedExplanation) {
+      const cleanedLabel = cleanLabel(label);
+      return NextResponse.json({
+        disease: cleanedLabel,
+        explanation: cachedExplanation,
+        cached: true
+      }, { status: 200 });
     }
 
     // Get explanation from Groq
     const explanation = await explainDiseaseWithGroq(label);
+
+    // Save to cache (ADDED)
+    await cache.set(label, explanation);
 
     // Clean label for response
     const cleanedLabel = cleanLabel(label);
