@@ -79,6 +79,9 @@ export function createSession(
  * Get or create a user session
  */
 export function getSession(sessionId: string): UserSession {
+  // Run lazy cleanup periodically
+  maybeCleanup();
+  
   let session = sessionStore.get(sessionId);
 
   // Check if session exists and is not expired
@@ -259,8 +262,17 @@ function cleanupExpiredSessions(): void {
   }
 }
 
-// Run cleanup every 10 minutes
-setInterval(cleanupExpiredSessions, 10 * 60 * 1000);
+// Lazy cleanup: only run when getSession is called
+let lastCleanupTime = Date.now();
+const CLEANUP_INTERVAL = 10 * 60 * 1000; // 10 minutes
+
+function maybeCleanup(): void {
+  const now = Date.now();
+  if (now - lastCleanupTime > CLEANUP_INTERVAL) {
+    cleanupExpiredSessions();
+    lastCleanupTime = now;
+  }
+}
 
 // ============================================================================
 // UTILITY FUNCTIONS

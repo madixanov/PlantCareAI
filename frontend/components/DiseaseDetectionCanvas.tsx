@@ -51,11 +51,25 @@ export default function DiseaseDetectionCanvas({
     image.crossOrigin = 'anonymous';
     
     image.onload = () => {
+      // Validate image dimensions
+      if (image.width <= 0 || image.height <= 0) {
+        console.error('Invalid image dimensions');
+        setImageLoaded(false);
+        return;
+      }
+
       // Calculate responsive dimensions
       const containerWidth = container.clientWidth;
       const aspectRatio = image.height / image.width;
       const canvasWidth = Math.min(containerWidth, 800);
       const canvasHeight = canvasWidth * aspectRatio;
+
+      // Validate calculated dimensions
+      if (!isFinite(canvasWidth) || !isFinite(canvasHeight) || canvasWidth <= 0 || canvasHeight <= 0) {
+        console.error('Invalid canvas dimensions');
+        setImageLoaded(false);
+        return;
+      }
 
       // Set canvas dimensions
       canvas.width = canvasWidth;

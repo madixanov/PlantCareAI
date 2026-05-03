@@ -217,23 +217,43 @@ export async function createCareLog(input: CreateCareLogInput): Promise<CareLog>
 
 /**
  * Get or create session ID for conversation memory
+ * Fixed: Race condition prevention and error handling
  */
+let cachedSessionId: string | null = null;
+
 function getSessionId(): string {
   if (typeof window === 'undefined') {
     // Server-side: generate new session ID
     return crypto.randomUUID();
   }
 
+  // Return cached session ID if available (prevents race condition)
+  if (cachedSessionId) {
+    return cachedSessionId;
+  }
+
   // Client-side: get from localStorage or create new
   const STORAGE_KEY = 'plantcare_session_id';
-  let sessionId = localStorage.getItem(STORAGE_KEY);
   
-  if (!sessionId) {
-    sessionId = crypto.randomUUID();
-    localStorage.setItem(STORAGE_KEY, sessionId);
+  try {
+    let sessionId = localStorage.getItem(STORAGE_KEY);
+    
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      localStorage.setItem(STORAGE_KEY, sessionId);
+    }
+    
+    // Cache the session ID to prevent race conditions
+    cachedSessionId = sessionId;
+    return sessionId;
+  } catch (error) {
+    // Fallback for private browsing or disabled storage
+    console.warn('localStorage unavailable, using temporary session ID');
+    if (!cachedSessionId) {
+      cachedSessionId = crypto.randomUUID();
+    }
+    return cachedSessionId;
   }
-  
-  return sessionId;
 }
 
 export async function askAI(

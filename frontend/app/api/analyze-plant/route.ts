@@ -468,34 +468,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         } catch (error) {
           console.error('Streaming error:', error);
           
-          // Send error and fallback to cached or default explanation
-          const errorData = JSON.stringify({
-            type: 'error',
-            message: 'Streaming failed, using fallback',
-          });
-          controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
-
-          // Try to get non-streaming explanation as fallback
           try {
-            const fallbackExplanation = await getExplanation(label);
-            const chunkData = JSON.stringify({
-              type: 'chunk',
-              text: fallbackExplanation,
+            // Send error and fallback to cached or default explanation
+            const errorData = JSON.stringify({
+              type: 'error',
+              message: 'Streaming failed, using fallback',
             });
-            controller.enqueue(encoder.encode(`data: ${chunkData}\n\n`));
-          } catch (fallbackError) {
-            const fallbackText = 'Unable to retrieve disease explanation at this time.';
-            const chunkData = JSON.stringify({
-              type: 'chunk',
-              text: fallbackText,
-            });
-            controller.enqueue(encoder.encode(`data: ${chunkData}\n\n`));
-          }
+            controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
 
-          const doneData = JSON.stringify({ type: 'done' });
-          controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));
-          
-          controller.close();
+            // Try to get non-streaming explanation as fallback
+            try {
+              const fallbackExplanation = await getExplanation(label);
+              const chunkData = JSON.stringify({
+                type: 'chunk',
+                text: fallbackExplanation,
+              });
+              controller.enqueue(encoder.encode(`data: ${chunkData}\n\n`));
+            } catch (fallbackError) {
+              const fallbackText = 'Unable to retrieve disease explanation at this time.';
+              const chunkData = JSON.stringify({
+                type: 'chunk',
+                text: fallbackText,
+              });
+              controller.enqueue(encoder.encode(`data: ${chunkData}\n\n`));
+            }
+
+            const doneData = JSON.stringify({ type: 'done' });
+            controller.enqueue(encoder.encode(`data: ${doneData}\n\n`));
+            
+            controller.close();
+          } catch (closeError) {
+            // Controller already closed or in error state
+            console.error('Error closing stream controller:', closeError);
+          }
         }
       },
     });

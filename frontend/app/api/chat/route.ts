@@ -12,6 +12,7 @@ import {
   buildConversationContext,
   buildProfileContext,
 } from '@/lib/memory';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 // ============================================================================
 // TYPES
@@ -56,61 +57,6 @@ interface GroqChatCompletionResponse {
     };
   }>;
 }
-
-// ============================================================================
-// RATE LIMITING
-// ============================================================================
-
-interface RateLimitEntry {
-  count: number;
-  resetTime: number;
-}
-
-const rateLimitMap = new Map<string, RateLimitEntry>();
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const RATE_LIMIT_MAX_REQUESTS = 10;
-
-function getRateLimitKey(request: NextRequest): string {
-  // Use X-Forwarded-For header if available (for proxied requests)
-  const forwardedFor = request.headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    return forwardedFor.split(',')[0].trim();
-  }
-  
-  // Fallback to other headers or a default
-  return request.headers.get('x-real-ip') || 'unknown';
-}
-
-function checkRateLimit(key: string): { allowed: boolean; resetTime?: number } {
-  const now = Date.now();
-  const entry = rateLimitMap.get(key);
-
-  if (!entry || now > entry.resetTime) {
-    // Create new entry or reset expired entry
-    rateLimitMap.set(key, {
-      count: 1,
-      resetTime: now + RATE_LIMIT_WINDOW_MS,
-    });
-    return { allowed: true };
-  }
-
-  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
-    return { allowed: false, resetTime: entry.resetTime };
-  }
-
-  entry.count++;
-  return { allowed: true };
-}
-
-// Clean up old entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of rateLimitMap.entries()) {
-    if (now > entry.resetTime) {
-      rateLimitMap.delete(key);
-    }
-  }
-}, RATE_LIMIT_WINDOW_MS);
 
 // ============================================================================
 // VALIDATION
@@ -467,21 +413,19 @@ async function callGroqAPI(
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    // Rate limiting
-    const rateLimitKey = getRateLimitKey(request);
-    const rateLimitResult = checkRateLimit(rateLimitKey);
-
-    if (!rateLimitResult.allowed) {
-      const retryAfter = rateLimitResult.resetTime
-        ? Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000)
-        : 60;
-
+    // Rate limiting using centralized rate limiter
+    const ip = request.headers.get('x-forwarded-for') ||
+               request.headers.get('x-real-ip') ||
+               'unknown';
+    
+    const allowed = await checkRateLimit(ip);
+    if (!allowed) {
       return NextResponse.json(
         { error: 'Too many requests. Please try again later.' },
         {
           status: 429,
           headers: {
-            'Retry-After': retryAfter.toString(),
+            'Retry-After': '60',
           },
         }
       );
@@ -519,7 +463,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Initialize or get session if sessionId provided
     if (sessionId) {
       getSession(sessionId); // This creates session if it doesn't exist
-      console.log(`[chat] Using session: ${sessionId}`);
     }
 
     // Fetch plant data if plantId provided
@@ -545,7 +488,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Save conversation to memory if session exists
     if (sessionId) {
       addConversationTurn(sessionId, message, answer);
-      console.log(`[chat] Saved conversation turn for session: ${sessionId}`);
     }
 
     const response: ChatResponse = { answer };
