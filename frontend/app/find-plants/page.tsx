@@ -2,61 +2,50 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { RoomConditions, PlantRecommendation, LightLevel, TemperatureLevel, PetType } from '@/types';
-import { getPlantRecommendations } from '@/lib/strapi';
+import { PlantRecommendation, RecommendRequest } from '@/types';
 
 export default function FindPlantsPage() {
-  // Room recommendation state
-  const [roomConditions, setRoomConditions] = useState<RoomConditions>({
-    lightLevel: 'medium',
-    temperature: 'moderate',
-    pets: ['none'],
-    notes: ''
+  // New API state structure
+  const [conditions, setConditions] = useState<RecommendRequest>({
+    light: 'medium',
+    temperature: 22,
+    humidity: 'medium',
+    windowDirection: 'south',
+    experienceLevel: 'beginner'
   });
   const [recommendations, setRecommendations] = useState<PlantRecommendation[]>([]);
-  const [roomSummary, setRoomSummary] = useState('');
-  const [recommendationLoading, setRecommendationLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [loading, setLoading] = useState(false);
   const [showRecommendations, setShowRecommendations] = useState(false);
 
-  // Room recommendation handlers
-  const handlePetChange = (pet: PetType, checked: boolean) => {
-    setRoomConditions(prev => {
-      let newPets = [...prev.pets];
-      
-      if (pet === 'none') {
-        newPets = checked ? ['none'] : [];
-      } else {
-        newPets = newPets.filter(p => p !== 'none');
-        
-        if (checked) {
-          newPets.push(pet);
-        } else {
-          newPets = newPets.filter(p => p !== pet);
-        }
-        
-        if (newPets.length === 0) {
-          newPets = ['none'];
-        }
-      }
-      
-      return { ...prev, pets: newPets };
-    });
-  };
-
+  // Handle form submission
   const handleGenerateRecommendations = async () => {
-    setRecommendationLoading(true);
+    setLoading(true);
+    setError('');
     setShowRecommendations(false);
     
     try {
-      const result = await getPlantRecommendations(roomConditions);
-      setRecommendations(result.recommendations);
-      setRoomSummary(result.roomSummary);
+      const response = await fetch('/api/recommend-plants', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(conditions),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to get recommendations');
+      }
+
+      const data = await response.json();
+      setRecommendations(data.recommendations || []);
       setShowRecommendations(true);
-    } catch (error) {
-      console.error('Error getting recommendations:', error);
-      alert('Sorry, there was an error generating recommendations. Please try again.');
+    } catch (err) {
+      console.error('Error getting recommendations:', err);
+      setError(err instanceof Error ? err.message : 'Failed to get recommendations. Please try again.');
     } finally {
-      setRecommendationLoading(false);
+      setLoading(false);
     }
   };
 
@@ -69,19 +58,21 @@ export default function FindPlantsPage() {
     }
   };
 
-  const getLightEmoji = (level: LightLevel) => {
+  const getLightEmoji = (level: string) => {
     switch (level) {
       case 'low': return '🌑';
       case 'medium': return '☁️';
       case 'bright': return '☀️';
+      default: return '💡';
     }
   };
 
-  const getTempEmoji = (temp: TemperatureLevel) => {
-    switch (temp) {
-      case 'cold': return '❄️';
-      case 'moderate': return '🌡️';
-      case 'warm': return '🔥';
+  const getHumidityEmoji = (level: string) => {
+    switch (level) {
+      case 'low': return '🏜️';
+      case 'medium': return '💧';
+      case 'high': return '💦';
+      default: return '💧';
     }
   };
 
@@ -99,7 +90,7 @@ export default function FindPlantsPage() {
             </span>
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            Tell us about your space and get AI-powered personalized plant recommendations tailored to your environment
+            Tell us about your space and get AI-powered personalized plant recommendations ranked from best to worst
           </p>
         </div>
 
@@ -118,88 +109,92 @@ export default function FindPlantsPage() {
                 {/* Light Level */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
-                    {getLightEmoji(roomConditions.lightLevel)} Light Level
+                    {getLightEmoji(conditions.light)} Light Level
                   </label>
                   <select
-                    value={roomConditions.lightLevel}
-                    onChange={(e) => setRoomConditions(prev => ({ ...prev, lightLevel: e.target.value as LightLevel }))}
+                    value={conditions.light}
+                    onChange={(e) => setConditions(prev => ({ ...prev, light: e.target.value as any }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-sm"
                   >
-                    <option value="low">🌑 Low (North-facing)</option>
-                    <option value="medium">☁️ Medium (East/West-facing)</option>
-                    <option value="bright">☀️ Bright (South-facing)</option>
+                    <option value="low">🌑 Low Light</option>
+                    <option value="medium">☁️ Medium Light</option>
+                    <option value="bright">☀️ Bright Light</option>
                   </select>
                 </div>
 
                 {/* Temperature */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
-                    {getTempEmoji(roomConditions.temperature)} Temperature
+                    🌡️ Temperature (°C)
+                  </label>
+                  <input
+                    type="number"
+                    value={conditions.temperature}
+                    onChange={(e) => setConditions(prev => ({ ...prev, temperature: Number(e.target.value) }))}
+                    min="0"
+                    max="50"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Typical room: 18-24°C</p>
+                </div>
+
+                {/* Humidity */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                    {getHumidityEmoji(conditions.humidity)} Humidity
                   </label>
                   <select
-                    value={roomConditions.temperature}
-                    onChange={(e) => setRoomConditions(prev => ({ ...prev, temperature: e.target.value as TemperatureLevel }))}
+                    value={conditions.humidity}
+                    onChange={(e) => setConditions(prev => ({ ...prev, humidity: e.target.value as any }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-sm"
                   >
-                    <option value="cold">❄️ Cold {'(<18°C / <64°F)'}</option>
-                    <option value="moderate">🌡️ Moderate (18–24°C / 64–75°F)</option>
-                    <option value="warm">🔥 Warm {'(>24°C / >75°F)'}</option>
+                    <option value="low">🏜️ Low Humidity</option>
+                    <option value="medium">💧 Medium Humidity</option>
+                    <option value="high">💦 High Humidity</option>
                   </select>
                 </div>
 
-                {/* Pets */}
+                {/* Window Direction */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">🐾 Pets in Home</label>
-                  <div className="space-y-3">
-                    <label className="flex items-center p-3 rounded-xl border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={roomConditions.pets.includes('cats')}
-                        onChange={(e) => handlePetChange('cats', e.target.checked)}
-                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-3"
-                      />
-                      <span className="text-sm text-gray-700 font-medium">🐱 Cats</span>
-                    </label>
-                    <label className="flex items-center p-3 rounded-xl border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={roomConditions.pets.includes('dogs')}
-                        onChange={(e) => handlePetChange('dogs', e.target.checked)}
-                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-3"
-                      />
-                      <span className="text-sm text-gray-700 font-medium">🐶 Dogs</span>
-                    </label>
-                    <label className="flex items-center p-3 rounded-xl border border-gray-200 hover:bg-gray-50 cursor-pointer transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={roomConditions.pets.includes('none')}
-                        onChange={(e) => handlePetChange('none', e.target.checked)}
-                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-3"
-                      />
-                      <span className="text-sm text-gray-700 font-medium">🚫 No pets</span>
-                    </label>
-                  </div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                    🧭 Window Direction
+                  </label>
+                  <select
+                    value={conditions.windowDirection}
+                    onChange={(e) => setConditions(prev => ({ ...prev, windowDirection: e.target.value as any }))}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-sm"
+                  >
+                    <option value="north">⬆️ North</option>
+                    <option value="south">⬇️ South</option>
+                    <option value="east">➡️ East</option>
+                    <option value="west">⬅️ West</option>
+                    <option value="none">🚫 No Window</option>
+                  </select>
                 </div>
 
-                {/* Optional Notes */}
+                {/* Experience Level */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Additional Notes</label>
-                  <textarea
-                    value={roomConditions.notes}
-                    onChange={(e) => setRoomConditions(prev => ({ ...prev, notes: e.target.value }))}
-                    placeholder="e.g., bathroom with high humidity, office with AC..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none transition-all duration-200 text-sm"
-                    rows={3}
-                  />
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                    👤 Experience Level
+                  </label>
+                  <select
+                    value={conditions.experienceLevel}
+                    onChange={(e) => setConditions(prev => ({ ...prev, experienceLevel: e.target.value as any }))}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-sm"
+                  >
+                    <option value="beginner">🌱 Beginner</option>
+                    <option value="intermediate">🌿 Intermediate</option>
+                    <option value="expert">🌳 Expert</option>
+                  </select>
                 </div>
 
                 {/* Generate Button */}
                 <button
                   onClick={handleGenerateRecommendations}
-                  disabled={recommendationLoading}
+                  disabled={loading}
                   className="btn-primary w-full text-lg py-4"
                 >
-                  {recommendationLoading ? (
+                  {loading ? (
                     <span className="flex items-center justify-center">
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -216,13 +211,20 @@ export default function FindPlantsPage() {
                     </span>
                   )}
                 </button>
+
+                {/* Error Display */}
+                {error && (
+                  <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+                    <p className="text-sm text-red-800 font-medium">{error}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* Recommendations Display */}
           <div className="lg:col-span-2">
-            {!showRecommendations && !recommendationLoading && (
+            {!showRecommendations && !loading && (
               <div className="card-glass p-16 text-center">
                 <div className="relative w-32 h-32 mx-auto mb-8">
                   <div className="absolute inset-0 bg-gradient-to-br from-emerald-200 to-teal-200 rounded-full blur-2xl opacity-50 animate-pulse"></div>
@@ -232,96 +234,91 @@ export default function FindPlantsPage() {
                 </div>
                 <h3 className="text-3xl font-bold text-gray-900 mb-4">Ready to Discover?</h3>
                 <p className="text-lg text-gray-600 mb-10 max-w-md mx-auto leading-relaxed">
-                  Fill out the room conditions and click "Generate Recommendations" to get personalized plant suggestions powered by AI.
+                  Fill out the room conditions and click "Generate Recommendations" to get AI-powered plant suggestions ranked from best to worst.
                 </p>
                 <div className="flex flex-wrap justify-center gap-3">
-                  <span className="badge badge-success text-sm px-4 py-2">🌑 Light Analysis</span>
-                  <span className="badge badge-success text-sm px-4 py-2">🌡️ Temperature Match</span>
-                  <span className="badge badge-success text-sm px-4 py-2">🐾 Pet Safety</span>
+                  <span className="badge badge-success text-sm px-4 py-2">🤖 AI-Powered</span>
+                  <span className="badge badge-success text-sm px-4 py-2">🏆 Ranked Results</span>
+                  <span className="badge badge-success text-sm px-4 py-2">💡 Expert Tips</span>
                 </div>
               </div>
             )}
 
-            {showRecommendations && (
-              <div className="space-y-8">
-                {/* Room Summary */}
-                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl shadow-xl border-2 border-emerald-200 p-8">
-                  <div className="flex items-start">
-                    <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center mr-5 shadow-lg flex-shrink-0">
-                      <span className="text-3xl">🏠</span>
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-emerald-900 mb-3 text-xl">Your Room Analysis</h3>
-                      <p className="text-emerald-800 leading-relaxed text-lg">{roomSummary}</p>
-                    </div>
-                  </div>
-                </div>
-
+            {showRecommendations && recommendations.length > 0 && (
+              <div className="space-y-6">
                 {/* Plant Recommendations */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {recommendations.map((plant, index) => (
-                    <div key={plant.id} className="card hover-lift fade-in" style={{ animationDelay: `${index * 0.1}s` }}>
-                      <div className="p-8">
-                      {/* Plant Header */}
+                {recommendations.map((plant, index) => (
+                  <div 
+                    key={index} 
+                    className={`card hover-lift fade-in ${plant.rank === 1 ? 'border-2 border-emerald-500 shadow-2xl' : ''}`}
+                    style={{ animationDelay: `${index * 0.1}s` }}
+                  >
+                    <div className="p-8">
+                      {/* Rank Badge */}
                       <div className="flex items-start justify-between mb-4">
-                        <div>
-                          <h4 className="text-lg font-bold text-gray-900">{plant.name}</h4>
-                          <p className="text-sm text-gray-600 italic">{plant.species}</p>
+                        <div className="flex items-center space-x-3">
+                          {plant.rank === 1 ? (
+                            <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-white px-4 py-2 rounded-full font-bold text-sm shadow-lg flex items-center space-x-2">
+                              <span>🌟</span>
+                              <span>Best Choice</span>
+                            </div>
+                          ) : (
+                            <div className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full font-semibold text-sm">
+                              #{plant.rank}
+                            </div>
+                          )}
                         </div>
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getDifficultyColor(plant.difficulty)}`}>
                           {plant.difficulty}
                         </span>
                       </div>
 
-                      {/* Plant Image Placeholder */}
-                      <div className="w-full h-36 bg-gradient-to-br from-green-100 via-green-200 to-emerald-200 rounded-xl mb-4 flex items-center justify-center shadow-inner">
-                        <span className="text-5xl">🌿</span>
-                      </div>
+                      {/* Plant Name */}
+                      <h4 className="text-2xl font-bold text-gray-900 mb-3">{plant.name}</h4>
 
                       {/* Why it fits */}
                       <div className="mb-4">
                         <h5 className="font-semibold text-gray-900 mb-2 flex items-center text-sm">
                           <span className="mr-2">✨</span>
-                          Why it's perfect for you
+                          Why it's perfect for your room
                         </h5>
                         <p className="text-sm text-gray-700 leading-relaxed">{plant.reason}</p>
                       </div>
 
-                      {/* Care highlights */}
+                      {/* Benefits */}
                       <div className="mb-4">
                         <h5 className="font-semibold text-gray-900 mb-2 flex items-center text-sm">
-                          <span className="mr-2">🌱</span>
-                          Care highlights
+                          <span className="mr-2">🌟</span>
+                          Benefits
                         </h5>
                         <ul className="space-y-1.5">
-                          {plant.careHighlights.map((highlight, idx) => (
+                          {plant.benefits.map((benefit, idx) => (
                             <li key={idx} className="text-sm text-gray-600 flex items-start">
-                              <span className="text-primary-600 mr-2 mt-0.5">•</span>
-                              <span>{highlight}</span>
+                              <span className="text-emerald-600 mr-2 mt-0.5">•</span>
+                              <span>{benefit}</span>
                             </li>
                           ))}
                         </ul>
                       </div>
 
-                      {/* Pet warning/safe */}
-                      {!plant.petSafe && plant.petWarning && (
-                        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-3">
-                          <p className="text-sm text-red-800 font-medium">{plant.petWarning}</p>
-                        </div>
-                      )}
-
-                      {plant.petSafe && (
-                        <div className="bg-green-50 border-2 border-green-200 rounded-xl p-3">
-                          <p className="text-sm text-green-800 font-medium flex items-center">
-                            <span className="mr-2">✅</span>
-                            Safe for cats and dogs
-                          </p>
-                        </div>
-                      )}
+                      {/* Care Tips */}
+                      <div>
+                        <h5 className="font-semibold text-gray-900 mb-2 flex items-center text-sm">
+                          <span className="mr-2">💡</span>
+                          Care Tips
+                        </h5>
+                        <ul className="space-y-1.5">
+                          {plant.tips.map((tip, idx) => (
+                            <li key={idx} className="text-sm text-gray-600 flex items-start">
+                              <span className="text-teal-600 mr-2 mt-0.5">•</span>
+                              <span>{tip}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
 
                 {/* Actions */}
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">

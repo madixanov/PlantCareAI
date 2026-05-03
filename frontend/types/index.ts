@@ -76,12 +76,39 @@ export interface AIImageAnalysisResponse {
   timestamp: string;
 }
 
-// Room Plant Recommendation Types
+// Room Plant Recommendation Types (New API Structure)
 export type LightLevel = 'low' | 'medium' | 'bright';
 export type TemperatureLevel = 'cold' | 'moderate' | 'warm';
 export type PetType = 'cats' | 'dogs' | 'none';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
+export type WindowDirection = 'north' | 'south' | 'east' | 'west' | 'none';
+export type ExperienceLevel = 'beginner' | 'intermediate' | 'expert';
 
+// New API request format
+export interface RecommendRequest {
+  light: LightLevel;
+  temperature: number; // Celsius
+  humidity: 'low' | 'medium' | 'high';
+  windowDirection: WindowDirection;
+  experienceLevel: ExperienceLevel;
+}
+
+// New API response format
+export interface PlantRecommendation {
+  rank: number;
+  name: string;
+  reason: string;
+  difficulty: DifficultyLevel;
+  benefits: string[];
+  tips: string[];
+}
+
+export interface RecommendResponse {
+  recommendations: PlantRecommendation[];
+  conditions: RecommendRequest;
+}
+
+// Legacy types (for backward compatibility)
 export interface RoomConditions {
   lightLevel: LightLevel;
   temperature: TemperatureLevel;
@@ -89,7 +116,7 @@ export interface RoomConditions {
   notes?: string;
 }
 
-export interface PlantRecommendation {
+export interface LegacyPlantRecommendation {
   id: string;
   name: string;
   species: string;
@@ -102,7 +129,7 @@ export interface PlantRecommendation {
 }
 
 export interface RoomRecommendationResponse {
-  recommendations: PlantRecommendation[];
+  recommendations: LegacyPlantRecommendation[];
   roomSummary: string;
   timestamp: string;
 }
