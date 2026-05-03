@@ -221,6 +221,27 @@ export async function createCareLog(input: CreateCareLogInput): Promise<CareLog>
  */
 let cachedSessionId: string | null = null;
 
+/**
+ * Validate and sanitize session ID
+ * Only allows alphanumeric characters, dashes, and underscores
+ * Max length: 50 characters
+ */
+function sanitizeSessionId(sessionId: string): string | null {
+  if (!sessionId || typeof sessionId !== 'string') {
+    return null;
+  }
+
+  // Remove any invalid characters and limit length
+  const sanitized = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 50);
+  
+  // Must have at least some valid characters
+  if (sanitized.length < 10) {
+    return null;
+  }
+
+  return sanitized;
+}
+
 function getSessionId(): string {
   if (typeof window === 'undefined') {
     // Server-side: generate new session ID
@@ -237,6 +258,18 @@ function getSessionId(): string {
   
   try {
     let sessionId = localStorage.getItem(STORAGE_KEY);
+    
+    // Validate and sanitize existing session ID
+    if (sessionId) {
+      const sanitized = sanitizeSessionId(sessionId);
+      if (!sanitized) {
+        // Invalid session ID, generate new one
+        console.warn('Invalid session ID found, generating new one');
+        sessionId = null;
+      } else {
+        sessionId = sanitized;
+      }
+    }
     
     if (!sessionId) {
       sessionId = crypto.randomUUID();

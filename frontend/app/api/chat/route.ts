@@ -62,6 +62,27 @@ interface GroqChatCompletionResponse {
 // VALIDATION
 // ============================================================================
 
+/**
+ * Sanitize session ID for security
+ * Only allows alphanumeric characters, dashes, and underscores
+ * Max length: 50 characters
+ */
+function sanitizeSessionId(sessionId: string): string | null {
+  if (!sessionId || typeof sessionId !== 'string') {
+    return null;
+  }
+
+  // Remove any invalid characters and limit length
+  const sanitized = sessionId.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 50);
+  
+  // Must have at least some valid characters
+  if (sanitized.length < 10) {
+    return null;
+  }
+
+  return sanitized;
+}
+
 function validateChatRequest(body: any): { valid: boolean; error?: string; data?: ChatRequest } {
   if (!body || typeof body !== 'object') {
     return { valid: false, error: 'Invalid request body' };
@@ -88,9 +109,22 @@ function validateChatRequest(body: any): { valid: boolean; error?: string; data?
     return { valid: false, error: 'Plant ID must be a string' };
   }
 
-  // Validate sessionId if provided
-  if (sessionId !== undefined && typeof sessionId !== 'string') {
-    return { valid: false, error: 'Session ID must be a string' };
+  // Validate and sanitize sessionId if provided
+  let sanitizedSessionId = sessionId;
+  if (sessionId !== undefined) {
+    if (typeof sessionId !== 'string') {
+      return { valid: false, error: 'Session ID must be a string' };
+    }
+    
+    // Sanitize session ID for security
+    const sanitized = sanitizeSessionId(sessionId);
+    if (!sanitized) {
+      // Generate new safe session ID if invalid
+      sanitizedSessionId = crypto.randomUUID();
+      console.warn('Invalid session ID provided, generated new one');
+    } else {
+      sanitizedSessionId = sanitized;
+    }
   }
 
   // Validate plantContext if provided
@@ -132,7 +166,7 @@ function validateChatRequest(body: any): { valid: boolean; error?: string; data?
     data: {
       message: trimmedMessage,
       plantId,
-      sessionId,
+      sessionId: sanitizedSessionId,
       plantContext,
       diseaseInfo: body.diseaseInfo,
     },

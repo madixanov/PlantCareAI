@@ -1,6 +1,7 @@
 /**
  * Cache Abstraction Layer
  * Provides a unified interface for caching that can be swapped with Redis
+ * NOTE: Currently uses in-memory storage (replace with Redis in production)
  */
 
 import { config } from './config';
@@ -24,14 +25,17 @@ export interface CacheAdapter {
  */
 class InMemoryCache implements CacheAdapter {
   private cache: Map<string, CacheEntry>;
-  private cleanupTimer?: ReturnType<typeof setInterval>;
+  private lastCleanupTime: number;
 
   constructor() {
     this.cache = new Map();
-    this.startCleanup();
+    this.lastCleanupTime = Date.now();
   }
 
   async get(key: string): Promise<string | null> {
+    // Run lazy cleanup periodically
+    this.maybeCleanup();
+    
     const entry = this.cache.get(key);
     
     if (!entry) {
@@ -49,6 +53,9 @@ class InMemoryCache implements CacheAdapter {
   }
 
   async set(key: string, value: string, ttl?: number): Promise<void> {
+    // Run lazy cleanup periodically
+    this.maybeCleanup();
+    
     // Enforce cache size limit (FIFO eviction)
     if (this.cache.size >= config.cache.maxSize) {
       const firstKey = this.cache.keys().next().value;
@@ -76,30 +83,35 @@ class InMemoryCache implements CacheAdapter {
   }
 
   /**
-   * Cleanup expired entries periodically
+   * Lazy cleanup: only run when cache is accessed
+   * Runs at most once every 10 minutes
    */
-  private startCleanup(): void {
-    this.cleanupTimer = setInterval(() => {
-      const now = Date.now();
-      const keysToDelete: string[] = [];
-
-      Array.from(this.cache.entries()).forEach(([key, entry]) => {
-        if (now - entry.timestamp > config.cache.ttl) {
-          keysToDelete.push(key);
-        }
-      });
-
-      keysToDelete.forEach(key => this.cache.delete(key));
-
-      if (keysToDelete.length > 0) {
-        console.log(`[Cache] Cleaned up ${keysToDelete.length} expired entries`);
-      }
-    }, config.cache.cleanupInterval);
+  private maybeCleanup(): void {
+    const now = Date.now();
+    if (now - this.lastCleanupTime > config.cache.cleanupInterval) {
+      this.cleanupExpired();
+      this.lastCleanupTime = now;
+    }
   }
 
-  stopCleanup(): void {
-    if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer);
+  /**
+   * Clean up expired entries
+   */
+  private cleanupExpired(): void {
+    const now = Date.now();
+    let cleanedCount = 0;
+
+    // Use Array.from for TypeScript compatibility
+    const entries = Array.from(this.cache.entries());
+    for (const [key, entry] of entries) {
+      if (now - entry.timestamp > config.cache.ttl) {
+        this.cache.delete(key);
+        cleanedCount++;
+      }
+    }
+
+    if (cleanedCount > 0) {
+      console.log(`[Cache] Cleaned up ${cleanedCount} expired entries`);
     }
   }
 }
