@@ -419,8 +419,17 @@ async function callGroqAPI(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      // Don't leak provider-specific errors
-      throw new Error('AI service error');
+      const errorText = await response.text();
+
+      console.error('Groq API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText,
+      });
+
+      throw new Error(
+        `Groq API Error ${response.status}: ${errorText}`
+      );
     }
 
     const data: GroqChatCompletionResponse = await response.json();
@@ -532,7 +541,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Return generic error message (don't leak internal details)
     return NextResponse.json(
-      { error: 'An error occurred while processing your request' },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Unknown error occurred',
+      },
       { status: 500 }
     );
   }

@@ -362,7 +362,9 @@ export async function detectDisease(
 
   try {
     // Step 1: Analyzing image
-    onProgress?.('Analyzing image...');
+    if (onProgress) {
+      onProgress('Analyzing image...');
+    }
 
     // Call unified analyze-plant endpoint
     const formData = new FormData();
@@ -393,7 +395,9 @@ export async function detectDisease(
         throw new Error('Invalid response from disease analysis service.');
       }
 
-      onProgress?.('Complete', data);
+      if (onProgress) {
+        onProgress('Complete', data);
+      }
 
       return {
         label: data.label,
@@ -458,17 +462,23 @@ async function handleStreamingResponse(
               // Step 2: Detection complete
               label = parsed.label;
               confidence = parsed.confidence;
-              onProgress?.('Detecting disease...', { label, confidence });
+              if (onProgress) {
+                onProgress('Detecting disease...', { label, confidence });
+              }
             } else if (parsed.type === 'chunk') {
               // Step 3: Streaming explanation
-              if (explanation === '') {
-                onProgress?.('Generating explanation...');
+              if (explanation === '' && onProgress) {
+                onProgress('Generating explanation...');
               }
               explanation += parsed.text;
-              onProgress?.('streaming', { chunk: parsed.text, explanation });
+              if (onProgress) {
+                onProgress('streaming', { chunk: parsed.text, explanation });
+              }
             } else if (parsed.type === 'done') {
               // Step 4: Complete
-              onProgress?.('Complete', { label, confidence, explanation });
+              if (onProgress) {
+                onProgress('Complete', { label, confidence, explanation });
+              }
             } else if (parsed.type === 'error') {
               console.error('Streaming error:', parsed.message);
             }

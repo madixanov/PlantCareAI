@@ -200,7 +200,7 @@ export default function DiseaseDetectionCanvas({
             <div className="flex flex-wrap gap-4 text-sm">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                <span className="text-gray-700">High (>80%)</span>
+                <span className="text-gray-700">{"High (>80%)"}</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
@@ -208,7 +208,7 @@ export default function DiseaseDetectionCanvas({
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                <span className="text-gray-700">Low (<50%)</span>
+                <span className="text-gray-700">{"Low (<50%)"}</span>
               </div>
             </div>
           </div>

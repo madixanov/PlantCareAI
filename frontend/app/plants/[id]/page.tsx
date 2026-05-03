@@ -54,7 +54,6 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
         getCareLogs(params.id),
       ]);
       setPlant(plantData);
-      console.log(plantData?.care_logs || []),
       setCareLogs(plantData?.care_logs || []);
     } catch (error) {
       console.error('Error loading plant data:', error);
@@ -153,7 +152,11 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
           confidence: result.confidence,
           analysis: result.explanation,
           issues: result.label.toLowerCase().includes('healthy') ? [] : [result.label],
-          careAdvice: result.explanation.split('\n').filter(line => line.trim().length > 0).slice(0, 3),
+          careAdvice: result.explanation
+            .split('\n')
+            .filter(line => line.trim().length > 0)
+            .slice(0, 3),
+          timestamp: new Date().toISOString(),
         });
       }
     } catch (error) {
