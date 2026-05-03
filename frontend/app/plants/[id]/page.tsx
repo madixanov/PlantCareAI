@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -8,6 +8,7 @@ import { Plant, CareLog, CreateCareLogInput, CareType, AIImageAnalysisResponse }
 import { getPlantById, getCareLogs, createCareLog, deletePlant, askAI, uploadImage, updatePlantImage, detectDisease, detectDiseaseAdvanced, Detection } from '@/lib/strapi';
 import ImageUpload from '@/components/ImageUpload';
 import DiseaseDetectionCanvas from '@/components/DiseaseDetectionCanvas';
+import MarkdownRenderer from '@/components/MarkdownRenderer';
 
 export default function PlantDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -20,12 +21,14 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Image analysis state
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageAnalysisResult, setImageAnalysisResult] = useState<AIImageAnalysisResponse | null>(null);
   const [imageAnalysisLoading, setImageAnalysisLoading] = useState(false);
+  const [imageAnalysisError, setImageAnalysisError] = useState<string | null>(null);
   
   // Advanced disease detection state
   const [useAdvancedDetection, setUseAdvancedDetection] = useState(false);
@@ -42,30 +45,41 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
   const [careType, setCareType] = useState<CareType>('watering');
   const [careNotes, setCareNotes] = useState('');
   const [careDate, setCareDate] = useState(new Date().toISOString().split('T')[0]);
+  const [careLogSubmitting, setCareLogSubmitting] = useState(false);
 
-  useEffect(() => {
-    loadPlantData();
-  }, [params.id]);
-
-  const loadPlantData = async () => {
+  // Memoize loadPlantData to prevent infinite loops
+  const loadPlantData = useCallback(async () => {
+    if (!params.id) return;
+    
     try {
-      const [plantData, careLogsData] = await Promise.all([
-        getPlantById(params.id),
-        getCareLogs(params.id),
-      ]);
-      setPlant(plantData);
-      setCareLogs(plantData?.care_logs || []);
+      setLoading(true);
+      const plantData = await getPlantById(params.id);
+      
+      if (plantData) {
+        setPlant(plantData);
+        setCareLogs(plantData.care_logs || []);
+      } else {
+        setPlant(null);
+        setCareLogs([]);
+      }
     } catch (error) {
       console.error('Error loading plant data:', error);
+      setPlant(null);
+      setCareLogs([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id]);
+
+  useEffect(() => {
+    loadPlantData();
+  }, [loadPlantData]);
 
   const handleAddCareLog = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!plant) return;
+    if (!plant || careLogSubmitting) return;
 
+    setCareLogSubmitting(true);
     try {
       const input: CreateCareLogInput = {
         careType,
@@ -75,27 +89,45 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
       };
 
       const newLog = await createCareLog(input);
-      setCareLogs([newLog, ...careLogs]);
+      
+      // Update state with new log at the beginning
+      setCareLogs(prevLogs => [newLog, ...prevLogs]);
+      
+      // Reset form
       setShowCareForm(false);
       setCareNotes('');
       setCareDate(new Date().toISOString().split('T')[0]);
+      setCareType('watering');
     } catch (error) {
       console.error('Error adding care log:', error);
+      alert(error instanceof Error ? error.message : 'Failed to add care log. Please try again.');
+    } finally {
+      setCareLogSubmitting(false);
     }
   };
 
   const handleAskAI = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!aiQuestion.trim() || !plant) return;
+    if (!aiQuestion.trim() || !plant || aiLoading) return;
 
     setAiLoading(true);
+    setAiError(null);
+    setAiResponse('');
+    
     try {
       // Pass plantId for RAG-style context-aware responses
       const response = await askAI(aiQuestion, plant.documentId);
-      setAiResponse(response);
+      
+      if (response && typeof response === 'string') {
+        setAiResponse(response);
+      } else {
+        throw new Error('Invalid response from AI');
+      }
     } catch (error) {
       console.error('Error asking AI:', error);
-      setAiResponse('Sorry, there was an error processing your question.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get AI response';
+      setAiError(errorMessage);
+      setAiResponse('');
     } finally {
       setAiLoading(false);
     }
@@ -128,40 +160,55 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
   };
 
   const handleAnalyzeImage = async () => {
-    if (!imageFile || !plant) return;
+    if (!imageFile || !plant || imageAnalysisLoading) return;
 
     setImageAnalysisLoading(true);
     setImageAnalysisResult(null);
     setAdvancedDetections([]);
     setDiseaseExplanation('');
+    setImageAnalysisError(null);
 
     try {
       if (useAdvancedDetection) {
         // Use advanced YOLOS detection
         const result = await detectDiseaseAdvanced(imageFile);
-        setAdvancedDetections(result.detections);
-        if (result.explanation) {
-          setDiseaseExplanation(result.explanation);
+        
+        if (result && result.detections && Array.isArray(result.detections)) {
+          setAdvancedDetections(result.detections);
+          if (result.explanation && typeof result.explanation === 'string') {
+            setDiseaseExplanation(result.explanation);
+          }
+        } else {
+          throw new Error('Invalid detection result');
         }
       } else {
         // Use basic classification
         const result = await detectDisease(imageFile);
+        
+        if (!result || !result.label || typeof result.confidence !== 'number') {
+          throw new Error('Invalid analysis result');
+        }
+        
+        // Safely parse explanation
+        const explanationLines = result.explanation
+          ? result.explanation.split('\n').filter(line => line.trim().length > 0)
+          : [];
+        
         // Convert to old format for compatibility
         setImageAnalysisResult({
           status: result.confidence > 0.7 ? 'healthy' : 'warning',
           confidence: result.confidence,
-          analysis: result.explanation,
+          analysis: result.explanation || 'No analysis available',
           issues: result.label.toLowerCase().includes('healthy') ? [] : [result.label],
-          careAdvice: result.explanation
-            .split('\n')
-            .filter(line => line.trim().length > 0)
-            .slice(0, 3),
+          careAdvice: explanationLines.slice(0, 3),
           timestamp: new Date().toISOString(),
         });
       }
     } catch (error) {
       console.error('Error analyzing image:', error);
-      alert(error instanceof Error ? error.message : 'Failed to analyze image. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to analyze image. Please try again.';
+      setImageAnalysisError(errorMessage);
+      alert(errorMessage);
     } finally {
       setImageAnalysisLoading(false);
     }
@@ -207,17 +254,25 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
   };
 
   const handleUploadPhoto = async () => {
-    if (!newPhotoFile || !plant) return;
+    if (!newPhotoFile || !plant || photoUploading) return;
 
     setPhotoUploading(true);
     try {
       // Upload image to Strapi
       const uploadedFile = await uploadImage(newPhotoFile);
       
+      if (!uploadedFile || !uploadedFile.id) {
+        throw new Error('Failed to upload image');
+      }
+      
       // Update plant with new image
       const updatedPlant = await updatePlantImage(plant.documentId, uploadedFile.id);
       
-      // Update local state
+      if (!updatedPlant) {
+        throw new Error('Failed to update plant');
+      }
+      
+      // Update local state immediately
       setPlant(updatedPlant);
       setShowPhotoUpload(false);
       setNewPhotoFile(null);
@@ -425,10 +480,10 @@ export default function PlantDetailPage({ params }: { params: { id: string } }) 
                   {aiResponse && (
                     <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
                       <div className="flex items-start">
-                        <span className="text-2xl mr-3">🤖</span>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-primary-900 mb-2">AI Response:</p>
-                          <p className="text-gray-800 whitespace-pre-line">{aiResponse}</p>
+                        <span className="text-2xl mr-3 flex-shrink-0">🤖</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-primary-900 mb-3">AI Response:</p>
+                          <MarkdownRenderer content={aiResponse} />
                         </div>
                       </div>
                     </div>

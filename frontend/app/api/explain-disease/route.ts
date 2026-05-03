@@ -89,7 +89,7 @@ async function explainDiseaseWithGroq(label: string): Promise<string> {
 
   // Clean the label for better readability
   const cleanedLabel = cleanLabel(label);
-
+  
   // Build user prompt
   const userPrompt = `Disease: ${cleanedLabel}
 
@@ -102,7 +102,7 @@ Explain:
 Be clear, practical, and concise.`;
 
   const requestBody: GroqChatCompletionRequest = {
-    model: 'llama3-70b-8192',
+    model: 'llama-3.3-70b-versatile',
     messages: [
       {
         role: 'system',
@@ -139,7 +139,11 @@ Be clear, practical, and concise.`;
       throw new Error('AI service error');
     }
 
-    const data: GroqChatCompletionResponse = await response.json();
+    const data: GroqChatCompletionResponse = await response
+      .json()
+      .catch(() => {
+        throw new Error('Invalid AI response format');
+      });
 
     if (!data.choices || data.choices.length === 0) {
       throw new Error('No response from AI service');

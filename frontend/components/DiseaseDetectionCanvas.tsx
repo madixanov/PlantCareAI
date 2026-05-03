@@ -84,49 +84,69 @@ export default function DiseaseDetectionCanvas({
       const scaleY = canvasHeight / image.height;
 
       // Draw bounding boxes
-      detections.forEach((detection) => {
-        const [x1, y1, x2, y2] = detection.box;
-        
-        // Scale coordinates to canvas size
-        const scaledX1 = x1 * scaleX;
-        const scaledY1 = y1 * scaleY;
-        const scaledX2 = x2 * scaleX;
-        const scaledY2 = y2 * scaleY;
-        const width = scaledX2 - scaledX1;
-        const height = scaledY2 - scaledY1;
+      if (Array.isArray(detections) && detections.length > 0) {
+        detections.forEach((detection) => {
+          // Validate detection object
+          if (!detection || !Array.isArray(detection.box) || detection.box.length !== 4) {
+            console.warn('Invalid detection object:', detection);
+            return;
+          }
 
-        // Get color based on confidence
-        const color = getColorByConfidence(detection.confidence);
+          const [x1, y1, x2, y2] = detection.box;
+          
+          // Validate box coordinates
+          if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2)) {
+            console.warn('Invalid box coordinates:', detection.box);
+            return;
+          }
+          
+          // Scale coordinates to canvas size
+          const scaledX1 = x1 * scaleX;
+          const scaledY1 = y1 * scaleY;
+          const scaledX2 = x2 * scaleX;
+          const scaledY2 = y2 * scaleY;
+          const width = scaledX2 - scaledX1;
+          const height = scaledY2 - scaledY1;
 
-        // Draw bounding box
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
-        ctx.strokeRect(scaledX1, scaledY1, width, height);
+          // Skip invalid boxes
+          if (width <= 0 || height <= 0) {
+            console.warn('Invalid box dimensions:', { width, height });
+            return;
+          }
 
-        // Draw label background
-        const label = `${detection.label} (${(detection.confidence * 100).toFixed(0)}%)`;
-        ctx.font = 'bold 14px sans-serif';
-        const textMetrics = ctx.measureText(label);
-        const textWidth = textMetrics.width;
-        const textHeight = 20;
-        const padding = 4;
+          // Get color based on confidence
+          const color = getColorByConfidence(detection.confidence);
 
-        // Position label above box, or below if too close to top
-        const labelY = scaledY1 > textHeight + padding ? scaledY1 - padding : scaledY1 + height + textHeight + padding;
+          // Draw bounding box
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 3;
+          ctx.strokeRect(scaledX1, scaledY1, width, height);
 
-        // Draw label background
-        ctx.fillStyle = color;
-        ctx.fillRect(
-          scaledX1,
-          labelY - textHeight,
-          textWidth + padding * 2,
-          textHeight + padding
-        );
+          // Draw label background
+          const label = `${detection.label || 'Unknown'} (${(detection.confidence * 100).toFixed(0)}%)`;
+          ctx.font = 'bold 14px sans-serif';
+          const textMetrics = ctx.measureText(label);
+          const textWidth = textMetrics.width;
+          const textHeight = 20;
+          const padding = 4;
 
-        // Draw label text
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(label, scaledX1 + padding, labelY - padding);
-      });
+          // Position label above box, or below if too close to top
+          const labelY = scaledY1 > textHeight + padding ? scaledY1 - padding : scaledY1 + height + textHeight + padding;
+
+          // Draw label background
+          ctx.fillStyle = color;
+          ctx.fillRect(
+            scaledX1,
+            labelY - textHeight,
+            textWidth + padding * 2,
+            textHeight + padding
+          );
+
+          // Draw label text
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(label, scaledX1 + padding, labelY - padding);
+        });
+      }
 
       setImageLoaded(true);
     };
@@ -139,17 +159,31 @@ export default function DiseaseDetectionCanvas({
     image.src = imageUrl;
   }, [imageUrl, detections]);
 
-  // Handle window resize
+  // Handle window resize with debounce
   useEffect(() => {
+    let resizeTimeout: NodeJS.Timeout;
+    
     const handleResize = () => {
-      // Trigger re-render by updating a dummy state
-      setImageLoaded(false);
-      setTimeout(() => setImageLoaded(true), 0);
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        // Force canvas redraw on resize
+        const canvas = canvasRef.current;
+        if (canvas && imageLoaded) {
+          setImageLoaded(false);
+          // Use requestAnimationFrame for smoother updates
+          requestAnimationFrame(() => {
+            setImageLoaded(true);
+          });
+        }
+      }, 250); // Debounce resize events
     };
 
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    return () => {
+      clearTimeout(resizeTimeout);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [imageLoaded]);
 
   return (
     <div ref={containerRef} className="w-full">

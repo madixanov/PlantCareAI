@@ -41,7 +41,7 @@ async function fallbackToBasicDetection(formData: FormData) {
     return {
       detections: [
         {
-          label: data.disease || 'Unknown',
+          label: data.label || 'Unknown',
           confidence: data.confidence || 0.5,
           box: [0, 0, 100, 100], // Full image box as fallback
         },
@@ -75,29 +75,33 @@ export async function POST(request: NextRequest) {
 
     // Convert file to buffer
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const uint8 = new Uint8Array(bytes);
 
     try {
       // Load YOLOS model
       const model = await getYOLOSModel();
 
       // Process image with YOLOS
-      const rawDetections = await model(buffer);
+      const rawDetections = await model(uint8);
 
       // Process and clean detections
       let detections = rawDetections.map((det: any) => ({
         label: cleanLabel(det.label),
         confidence: Math.round(det.score * 100) / 100,
-        box: [
-          Math.round(det.box.xmin),
-          Math.round(det.box.ymin),
-          Math.round(det.box.xmax),
-          Math.round(det.box.ymax),
-        ],
+        box: det.box
+          ? [
+              Math.round(det.box.xmin || 0),
+              Math.round(det.box.ymin || 0),
+              Math.round(det.box.xmax || 0),
+              Math.round(det.box.ymax || 0),
+            ]
+          : [0, 0, 100, 100],
       }));
 
       // Sort by confidence (highest first)
-      detections.sort((a: any, b: any) => b.confidence - a.confidence);
+      detections.sort(
+        (a: any, b: any) => (b.confidence || 0) - (a.confidence || 0)
+      );
 
       // Limit to top 3 detections
       detections = detections.slice(0, 3);

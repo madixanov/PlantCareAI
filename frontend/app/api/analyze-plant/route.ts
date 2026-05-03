@@ -139,7 +139,7 @@ async function detectDisease(imageBuffer: Buffer): Promise<{
 
     const topPrediction = results[0];
     const cleanedLabel = cleanLabel(topPrediction.label);
-    const roundedConfidence = Math.round(topPrediction.score * 100) / 100;
+    const roundedConfidence = Number((topPrediction.score ?? 0).toFixed(4));
 
     return {
       label: cleanedLabel,
@@ -187,7 +187,7 @@ Explain:
 Be clear, practical, and concise.`;
 
   const requestBody: GroqChatCompletionRequest = {
-    model: 'llama3-70b-8192',
+    model: 'llama-3.3-70b-versatile',
     messages: [
       {
         role: 'system',
@@ -269,7 +269,7 @@ Explain:
 Be clear, practical, and concise.`;
 
   const requestBody: GroqChatCompletionRequest = {
-    model: 'llama3-70b-8192',
+    model: 'llama-3.3-70b-versatile',
     messages: [
       {
         role: 'system',
@@ -359,10 +359,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Convert file to buffer
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const uint8 = new Uint8Array(arrayBuffer);
 
     // Step 1: Detect disease
-    const { label, confidence } = await detectDisease(buffer);
+    const { label, confidence } = await detectDisease(Buffer.from(uint8));
 
     // Step 2: Check if explanation is cached
     const cleanedLabel = cleanLabel(label);

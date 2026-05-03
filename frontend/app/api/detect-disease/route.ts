@@ -87,10 +87,11 @@ async function detectPlantDisease(file: File): Promise<DiseaseDetectionResponse>
 
     // Convert file to buffer for processing
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const uint8 = new Uint8Array(arrayBuffer);
 
     // Run classification
-    const results = await classifier(buffer);
+    const results = await classifier(uint8);
+
 
     // Get top prediction with fallback
     if (!results || results.length === 0) {
@@ -105,7 +106,7 @@ async function detectPlantDisease(file: File): Promise<DiseaseDetectionResponse>
 
     // Clean label and round confidence
     const cleanedLabel = cleanLabel(topPrediction.label);
-    const roundedConfidence = Math.round(topPrediction.score * 100) / 100;
+    const roundedConfidence = Math.round((topPrediction.score || 0) * 100) / 100;
 
     return {
       label: cleanedLabel,
